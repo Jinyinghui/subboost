@@ -1,3 +1,17 @@
+# SubBoost v2.11.3
+
+## 中文
+
+- 新增站内更新：设置页“系统更新”卡片可检测新版本并一键更新，不用再去服务器终端执行 subboost update。更新沿用原有的更新流程（含数据库备份与失败回滚），更新中会显示进度，服务短暂重启后自动恢复。
+- 更新检测改为读取自己的发布清单（SUBBOOST_RELEASE_URL），不再只看上游发布。
+
+## English
+
+- Add in-website updates: the System Update card on the Settings page checks for new releases and updates with one click, no more `subboost update` on the server. Updates reuse the existing update flow (database backup and rollback on failure) and show live progress while the service briefly restarts.
+- Release checks now read the fork's own release manifest (SUBBOOST_RELEASE_URL) instead of only upstream releases.
+
+---
+
 # SubBoost v2.11.2
 
 ## 中文
