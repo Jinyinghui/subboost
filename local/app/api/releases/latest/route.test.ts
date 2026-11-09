@@ -3,6 +3,7 @@ import { compareStableVersions, parseStableVersion } from "@local/lib/release-ve
 import { GET } from "./route";
 
 const originalAppReleaseVersion = process.env.APP_RELEASE_VERSION;
+const originalReleaseUrl = process.env.SUBBOOST_RELEASE_URL;
 
 type LatestReleasePayload = {
   currentVersion: string;
@@ -27,6 +28,32 @@ describe("local latest release route", () => {
     vi.unstubAllGlobals();
     if (originalAppReleaseVersion === undefined) delete process.env.APP_RELEASE_VERSION;
     else process.env.APP_RELEASE_VERSION = originalAppReleaseVersion;
+    if (originalReleaseUrl === undefined) delete process.env.SUBBOOST_RELEASE_URL;
+    else process.env.SUBBOOST_RELEASE_URL = originalReleaseUrl;
+  });
+
+  it("checks the fork release manifest when SUBBOOST_RELEASE_URL is set", async () => {
+    process.env.APP_RELEASE_VERSION = "2.3.20";
+    process.env.SUBBOOST_RELEASE_URL =
+      "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => releaseResponse({ version: "2.3.21", image: "ghcr.io/jinyinghui/subboost:v2.3.21" }))
+    );
+
+    await expect(readPayload()).resolves.toEqual({
+      currentVersion: "2.3.20",
+      latestVersion: "2.3.21",
+      latestTag: "v2.3.21",
+      releaseUrl: "https://github.com/Jinyinghui/subboost/releases/tag/v2.3.21",
+      hasUpdate: true,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Accept: "application/json" }),
+      })
+    );
   });
 
   it("reports an update when the latest stable GitHub release is newer", async () => {

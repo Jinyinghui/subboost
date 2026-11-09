@@ -9,6 +9,18 @@ ENV_FILE="$SUBBOOST_HOME/.env"
 COMPOSE_FILE="$SUBBOOST_HOME/docker-compose.yml"
 BACKUP_DIR="$SUBBOOST_HOME/backups"
 TMP_DIR="${TMPDIR:-/tmp}/subboost-manager.$$"
+# Website-initiated updates: the app container (which cannot reach the host
+# Docker daemon) writes a request file here through a bind mount; a systemd
+# path unit watches it and runs `subboost run-update-request`.
+OPS_DIR="$SUBBOOST_HOME/ops"
+OPS_REQUEST_FILE="$OPS_DIR/update-requested.json"
+OPS_STATUS_FILE="$OPS_DIR/update-status.json"
+OPS_WATCHER_FILE="$OPS_DIR/watcher.json"
+OPS_UPDATE_LOG="$OPS_DIR/update.log"
+UPDATE_WATCHER_PATH_UNIT="/etc/systemd/system/subboost-update-watcher.path"
+UPDATE_WATCHER_SERVICE_UNIT="/etc/systemd/system/subboost-update-watcher.service"
+# UID of the `node` user the app container runs as (official node image).
+OPS_APP_UID="1000"
 
 say() {
   printf '%s\n' "$*"
@@ -389,6 +401,117 @@ status_cmd() {
   say "常用命令: subboost logs / subboost backup / subboost update / subboost restart / subboost doctor"
 }
 
+json_escape() {
+  local input="$1"
+  input=${input//\\/\\\\}
+  input=${input//\"/\\\"}
+  input=${input//$'\n'/\\n}
+  input=${input//$'\r'/}
+  input=${input//$'\t'/\\t}
+  printf '%s' "$input"
+}
+
+# Write the website-visible update status atomically. Relies on the
+# OPS_REQUESTED_* / OPS_STARTED_AT globals set by run_update_request_locked.
+ops_write_status() {
+  local state="$1" message="${2:-}"
+  local finished_at="" log_tail=""
+  if [ "$state" = "succeeded" ] || [ "$state" = "failed" ]; then
+    finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  fi
+  if [ -f "$OPS_UPDATE_LOG" ]; then
+    log_tail="$(tail -n 15 "$OPS_UPDATE_LOG" 2>/dev/null || true)"
+  fi
+  local tmp_status="$OPS_STATUS_FILE.tmp.$$"
+  {
+    printf '{\n'
+    printf '  "state": "%s",\n' "$(json_escape "$state")"
+    printf '  "requestedAt": "%s",\n' "$(json_escape "${OPS_REQUESTED_AT:-}")"
+    printf '  "requestedBy": "%s",\n' "$(json_escape "${OPS_REQUESTED_BY:-}")"
+    printf '  "targetVersion": "%s",\n' "$(json_escape "${OPS_TARGET_VERSION:-}")"
+    printf '  "startedAt": "%s",\n' "$(json_escape "${OPS_STARTED_AT:-}")"
+    printf '  "finishedAt": "%s",\n' "$(json_escape "$finished_at")"
+    printf '  "message": "%s",\n' "$(json_escape "$message")"
+    printf '  "logTail": "%s"\n' "$(json_escape "$log_tail")"
+    printf '}\n'
+  } > "$tmp_status"
+  sudo_do mv "$tmp_status" "$OPS_STATUS_FILE"
+}
+
+ensure_update_watcher() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  sudo_do mkdir -p "$OPS_DIR" || return 0
+  sudo_do chown "$OPS_APP_UID:$OPS_APP_UID" "$OPS_DIR" 2>/dev/null || sudo_do chmod 0777 "$OPS_DIR" || true
+  sudo_do rm -f "$OPS_REQUEST_FILE" || true
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"installed":true,"installedAt":"%s"}\n' "$now" | sudo_do tee "$OPS_WATCHER_FILE" >/dev/null || return 0
+  sudo_do tee "$UPDATE_WATCHER_PATH_UNIT" >/dev/null <<EOF || return 0
+[Unit]
+Description=SubBoost update request watcher
+[Path]
+PathModified=$OPS_REQUEST_FILE
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo_do tee "$UPDATE_WATCHER_SERVICE_UNIT" >/dev/null <<EOF || return 0
+[Unit]
+Description=Run SubBoost update on request
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/subboost run-update-request
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo_do systemctl daemon-reload || return 0
+  sudo_do systemctl enable --now subboost-update-watcher.path || return 0
+  say "Update watcher installed: website updates enabled."
+}
+
+run_update_request_locked() {
+  OPS_REQUESTED_AT="$(json_get requestedAt "$OPS_REQUEST_FILE" || true)"
+  OPS_REQUESTED_BY="$(json_get requestedBy "$OPS_REQUEST_FILE" || true)"
+  OPS_TARGET_VERSION="$(json_get targetVersion "$OPS_REQUEST_FILE" || true)"
+  sudo_do rm -f "$OPS_REQUEST_FILE" || true
+  OPS_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  ops_write_status "running" "正在更新……"
+  : >> "$OPS_UPDATE_LOG" 2>/dev/null || sudo_do touch "$OPS_UPDATE_LOG" || true
+  local update_code=0
+  if ( update_cmd ) >>"$OPS_UPDATE_LOG" 2>&1; then
+    update_code=0
+  else
+    update_code=$?
+  fi
+  tail -n 200 "$OPS_UPDATE_LOG" > "$OPS_UPDATE_LOG.tmp.$$" 2>/dev/null && sudo_do mv "$OPS_UPDATE_LOG.tmp.$$" "$OPS_UPDATE_LOG" || true
+  if [ "$update_code" = "0" ]; then
+    ops_write_status "succeeded" "更新完成"
+  else
+    ops_write_status "failed" "更新失败（exit $update_code），请查看服务器 $OPS_UPDATE_LOG"
+  fi
+  return "$update_code"
+}
+
+run_update_request() {
+  [ -f "$OPS_REQUEST_FILE" ] || return 0
+  sudo_do mkdir -p "$OPS_DIR" || return 0
+  local lock_dir="$OPS_DIR/.update-lock"
+  if [ -d "$lock_dir" ]; then
+    if [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +30 2>/dev/null)" ]; then
+      sudo_do rmdir "$lock_dir" 2>/dev/null || return 0
+    else
+      return 0
+    fi
+  fi
+  sudo_do mkdir "$lock_dir" 2>/dev/null || return 0
+  local result=0
+  (
+    trap 'sudo_do rmdir "$lock_dir" 2>/dev/null || true' EXIT
+    run_update_request_locked
+  ) || result=$?
+  sudo_do rmdir "$lock_dir" 2>/dev/null || true
+  return "$result"
+}
+
 update_cmd() {
   load_env
   local release_url="${SUBBOOST_RELEASE_URL:-}"
@@ -543,6 +666,7 @@ update_cmd() {
   fi
 
   docker_cmd image rm "$rollback_tag" >/dev/null 2>&1 || true
+  ensure_update_watcher || true
   load_env
   status_cmd
 }
@@ -646,6 +770,8 @@ main() {
     menu) menu_cmd ;;
     status) status_cmd ;;
     update) update_cmd ;;
+    ensure-update-watcher) ensure_update_watcher ;;
+    run-update-request) run_update_request ;;
     logs) logs_cmd "$@" ;;
     backup) backup_cmd ;;
     restart) restart_cmd ;;

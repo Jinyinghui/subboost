@@ -30,6 +30,11 @@ services:
       LOCAL_SETUP_TOKEN: ${LOCAL_SETUP_TOKEN:-}
       TRUST_PROXY_HEADERS: ${TRUST_PROXY_HEADERS:-false}
       APP_URL: ${APP_URL:-http://localhost:3000}
+      SUBBOOST_RELEASE_URL: ${SUBBOOST_RELEASE_URL:-}
+    volumes:
+      # Website-initiated updates: the app writes an update request here;
+      # a host systemd watcher runs `subboost update` for it.
+      - ./ops:/ops
 
   cron:
     image: curlimages/curl:8.11.1

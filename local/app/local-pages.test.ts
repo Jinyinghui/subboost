@@ -20,6 +20,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock("lucide-react", () => ({
   LogOut: () => React.createElement("span", null, "LogOut"),
   Network: () => React.createElement("span", null, "Network"),
+  RefreshCw: () => React.createElement("span", null, "RefreshCw"),
   ServerCog: () => React.createElement("span", null, "ServerCog"),
   ShieldCheck: () => React.createElement("span", null, "ShieldCheck"),
 }));
@@ -244,6 +245,8 @@ describe("local app pages and adapters", () => {
     expect(html).toContain("允许本机和局域网订阅");
     expect(html).toContain("本机、局域网及其他保留地址都可作为订阅源");
     expect(html).toContain("/api/health/live");
+    expect(html).toContain("系统更新");
+    expect(html).toContain("当前版本");
     expect(mocks.buttons.find((button: any) => button.variant === "destructive")).toMatchObject({
       disabled: true,
     });
