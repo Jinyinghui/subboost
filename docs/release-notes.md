@@ -1,3 +1,13 @@
+# SubBoost v2.11.10
+
+## 中文
+
+- 国家分组从自定义分组里独立出来：分流代理组配置新增“国家分组”分类标签（排在自定义分组之前），12 个预置国家（及之后新增的国家）都放在这里，带顶部的国家分组区（改表达式、新增国家）；自定义分组标签里只剩非国家分组。国家分组仍是普通自定义分组，改名、规则、高级设置都在国家分组标签内的卡片上改；两个标签的计数各算各的，新建配置默认展开国家分组。
+
+## English
+
+- Country groups are no longer listed under custom groups: the proxy-group config now has a dedicated "Country groups" category tab (placed before custom groups) holding the 12 preset countries (and any countries added later), with the country-groups section at the top (edit expressions, add countries); the custom-groups tab only shows non-country groups. Country groups remain ordinary custom groups — rename, rules and advanced settings live on their cards inside the country tab; each tab counts its own groups, and a fresh config expands the country tab by default.
+
 # SubBoost v2.11.9
 
 ## 中文

@@ -88,6 +88,7 @@ vi.mock("@subboost/core/generator/proxy-groups", () => ({
   CATEGORY_INFO: {
     core: { name: "核心", order: 1 },
     service: { name: "服务", order: 1.5 },
+    country: { name: "国家分组", order: 1.75 },
     custom: { name: "自定义", order: 2 },
   },
 	  PROXY_GROUP_MODULES: [
@@ -101,6 +102,8 @@ vi.mock("@subboost/core/generator/proxy-groups", () => ({
 	    ] },
 	  ],
   generateProxyGroups: vi.fn(() => []),
+  // country-groups 的 import 链在加载时调用它（yaml-template 的 MINIMAL_MODULE_IDS）
+  getModulesForTemplate: () => [],
 }));
 vi.mock("@subboost/core/proxy-group-name", () => ({
   resolveProxyGroupModuleName: (module: { name: string }, override?: string) => override || module.name,
@@ -119,8 +122,9 @@ vi.mock("./proxy-group-rule-targets", () => ({
     target === "Auto Override" ? [{ rule: { id: "manual-1" }, index: 0 }] : [],
 }));
 vi.mock("./proxy-groups-custom-groups-panel", () => ({
-  ProxyGroupsCustomGroupsPanel: () => {
+  ProxyGroupsCustomGroupsPanel: (props: any) => {
     mocks.captures.customPanelRendered = true;
+    mocks.captures.customPanelModes.push(props?.mode);
     return null;
   },
 }));
@@ -158,6 +162,7 @@ function renderCategories(overrides: Record<number, unknown> = {}) {
   mocks.captures.moduleCards = [];
   mocks.captures.settingsDialogs = [];
   mocks.captures.customPanelRendered = false;
+  mocks.captures.customPanelModes = [];
   mocks.captures.customRulesRendered = false;
   try {
     const html = renderToStaticMarkup(React.createElement(ProxyGroupsCategories));
@@ -178,6 +183,7 @@ function renderCategoryTree(overrides: Record<number, unknown> = {}) {
   mocks.captures.moduleCards = [];
   mocks.captures.settingsDialogs = [];
   mocks.captures.customPanelRendered = false;
+  mocks.captures.customPanelModes = [];
   mocks.captures.customRulesRendered = false;
   try {
     return { tree: ProxyGroupsCategories(), setters: stateMock.setters };
@@ -205,7 +211,7 @@ describe("ProxyGroupsCategories", () => {
     vi.clearAllMocks();
     stateMock.refOverride = undefined;
     mocks.confirmDialog.mockResolvedValue(true);
-    mocks.captures = { inputs: [], dropdownItems: [], moduleCards: [], settingsDialogs: [] };
+    mocks.captures = { inputs: [], dropdownItems: [], moduleCards: [], settingsDialogs: [], customPanelModes: [] };
     mocks.store = {
       ruleProviderBaseUrl: "https://rules.example/base/",
       nodes: [],
@@ -255,12 +261,36 @@ describe("ProxyGroupsCategories", () => {
     renderCategories();
 
     expect(mocks.captures.customPanelRendered).toBe(true);
+    expect(mocks.captures.customPanelModes).toEqual(["custom"]);
     expect(mocks.captures.moduleCards).toHaveLength(0);
 
     mocks.store.customProxyGroups = [];
     renderCategories();
     expect(mocks.captures.customPanelRendered).toBe(false);
+    expect(mocks.captures.customPanelModes).toEqual([]);
     expect(mocks.captures.moduleCards).toHaveLength(0);
+  });
+
+  it("opens only the country category by default when only country groups exist", () => {
+    mocks.store.customProxyGroups = [
+      { id: "country-1", name: "🇭🇰 香港节点", groupType: "url-test", advanced: { regions: ["hk"] } },
+    ];
+    renderCategories();
+
+    expect(mocks.captures.customPanelModes).toEqual(["country"]);
+    expect(mocks.captures.moduleCards).toHaveLength(0);
+  });
+
+  it("applies the country category default after country groups appear later", () => {
+    mocks.store.customProxyGroups = [
+      { id: "country-1", name: "🇭🇰 香港节点", groupType: "url-test", advanced: { regions: ["hk"] } },
+    ];
+    stateMock.refOverride = false;
+    renderCategories({ 0: new Set() });
+    stateMock.effects[0]();
+    expect(stateMock.setters[0]).toHaveBeenCalledWith(expect.any(Function));
+    expect((stateMock.setters[0] as any).lastValue.has("country")).toBe(true);
+    expect((stateMock.setters[0] as any).lastValue.has("custom")).toBe(false);
   });
 
   it("applies the custom category default after custom groups appear later", () => {
@@ -603,6 +633,9 @@ describe("ProxyGroupsCategories", () => {
     expect((setters[0] as any).lastValue.has("core")).toBe(false);
 
     categoryButtons[2].props.onClick();
+    expect((setters[0] as any).lastValue.has("country")).toBe(true);
+
+    categoryButtons[3].props.onClick();
     expect((setters[0] as any).lastValue.has("custom")).toBe(true);
   });
 });

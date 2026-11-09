@@ -27,6 +27,7 @@ import {
 import type { ProxyGroupTypeMenuValue } from "./proxy-group-type-menu";
 import { ProxyGroupAdvancedPanel } from "./proxy-group-advanced-panel";
 import { CountryGroupsSection } from "./country-groups-section";
+import { isCountryProxyGroup } from "./country-groups";
 import {
   buildProxyGroupName,
   parseProxyGroupNameDraft,
@@ -42,9 +43,12 @@ import { findGroupListenerBinding } from "./group-listener-settings";
 export function ProxyGroupsCustomGroupsPanel({
   advancedMode = false,
   nodeCounts,
+  mode = "custom",
 }: {
   advancedMode?: boolean;
   nodeCounts?: Map<string, number>;
+  /** "country" 只显示国家分组（含国家分组区），"custom" 只显示其余自定义分组 */
+  mode?: "custom" | "country";
 }) {
   const {
     enabledProxyGroups,
@@ -85,6 +89,14 @@ export function ProxyGroupsCustomGroupsPanel({
   const listenerConflictState = React.useMemo(
     () => ({ dnsYaml, mixedPort, listenerPorts, groupListeners }),
     [dnsYaml, mixedPort, listenerPorts, groupListeners]
+  );
+  const isCountryMode = mode === "country";
+  const visibleGroups = React.useMemo(
+    () =>
+      isCountryMode
+        ? customProxyGroups.filter(isCountryProxyGroup)
+        : customProxyGroups.filter((group) => !isCountryProxyGroup(group)),
+    [customProxyGroups, isCountryMode],
   );
 
   const getAllGroupNamesForUniqCheck = React.useCallback(() => {
@@ -196,10 +208,11 @@ export function ProxyGroupsCustomGroupsPanel({
 
   return (
     <div className="space-y-2">
-      {/* 国家分组区（单独管理国家分组的筛选表达式与新增国家） */}
-      <CountryGroupsSection />
+      {/* 国家分组模式下顶部是国家分组区；自定义模式下不渲染 */}
+      {isCountryMode && <CountryGroupsSection />}
 
-      {/* 新建自定义分组 */}
+      {/* 新建自定义分组（仅自定义模式） */}
+      {!isCountryMode && (
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5">
         <div className="grid min-w-0 grid-cols-[minmax(5.75rem,1fr)_minmax(0,1.47fr)] gap-1.5">
           <ProxyGroupNameEditor
@@ -248,13 +261,16 @@ export function ProxyGroupsCustomGroupsPanel({
           <Check className="h-3.5 w-3.5" />
         </Button>
       </div>
+      )}
 
-      {/* 自定义分组列表 */}
-      {customProxyGroups.length === 0 ? (
-        <div className="text-xs text-fg-40 py-3 text-center">暂无自定义分组</div>
+      {/* 分组列表 */}
+      {visibleGroups.length === 0 ? (
+        <div className="text-xs text-fg-40 py-3 text-center">
+          {isCountryMode ? "暂无国家分组" : "暂无自定义分组"}
+        </div>
       ) : (
         <div className="space-y-1">
-          {customProxyGroups.map((group) => {
+          {visibleGroups.map((group) => {
             const isExpanded = expandedCustomGroups.has(group.id);
             const isEditing = editingCustomGroupId === group.id;
             const manualRules = listCustomRulesForTarget(customRules, group.name, {

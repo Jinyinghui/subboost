@@ -34,6 +34,7 @@ import {
 } from "./proxy-group-rule-targets";
 import { ProxyGroupsCustomGroupsPanel } from "./proxy-groups-custom-groups-panel";
 import { ProxyGroupsCustomRoutingRules } from "./proxy-groups-custom-routing-rules";
+import { isCountryProxyGroup } from "./country-groups";
 import { ProxyGroupAdvancedPanel } from "./proxy-group-advanced-panel";
 import { ProxyGroupsModuleCard } from "./proxy-groups-module-card";
 import { GroupAdvancedSettingsDialog } from "./group-advanced-settings-dialog";
@@ -42,6 +43,7 @@ import { findGroupListenerBinding } from "./group-listener-settings";
 const PROXY_GROUP_SECTION_LABEL_ROW_CLASS = "flex min-h-7 items-center gap-2";
 const PROXY_GROUP_SECTION_LABEL_CLASS = "text-xs text-fg-50";
 const CUSTOM_CATEGORY_ID = "custom";
+const COUNTRY_CATEGORY_ID = "country";
 
 export function ProxyGroupsCategories() {
   const {
@@ -87,10 +89,22 @@ export function ProxyGroupsCategories() {
     listenerPorts = {},
   } = useConfigStore();
 
+  // 国家分组是自定义分组的一个子集（url-test + 地区/表达式），单独成类时不再计入自定义分组
+  const countryGroups = customProxyGroups.filter(isCountryProxyGroup);
+  const nonCountryGroupCount =
+    customProxyGroups.length - countryGroups.length;
+
   const [expandedCategories, setExpandedCategories] = React.useState<
     Set<string>
-  >(new Set(customProxyGroups.length > 0 ? [CUSTOM_CATEGORY_ID] : []));
-  const didApplyCustomCategoryDefault = React.useRef(customProxyGroups.length > 0);
+  >(
+    new Set([
+      ...(countryGroups.length > 0 ? [COUNTRY_CATEGORY_ID] : []),
+      ...(nonCountryGroupCount > 0 ? [CUSTOM_CATEGORY_ID] : []),
+    ]),
+  );
+  const didApplyCategoryDefaults = React.useRef(
+    countryGroups.length > 0 || nonCountryGroupCount > 0,
+  );
   const effectiveNodes = React.useMemo(
     () => resolveNodeNameFilter(nodes, nodeNameFilter).effectiveNodes,
     [nodeNameFilter, nodes],
@@ -108,15 +122,15 @@ export function ProxyGroupsCategories() {
     [dnsYaml, mixedPort, listenerPorts, groupListeners]
   );
   React.useEffect(() => {
-    if (didApplyCustomCategoryDefault.current || customProxyGroups.length === 0) return;
-    didApplyCustomCategoryDefault.current = true;
+    if (didApplyCategoryDefaults.current || customProxyGroups.length === 0) return;
+    didApplyCategoryDefaults.current = true;
     setExpandedCategories((prev) => {
-      if (prev.has(CUSTOM_CATEGORY_ID)) return prev;
       const next = new Set(prev);
-      next.add(CUSTOM_CATEGORY_ID);
+      if (countryGroups.length > 0) next.add(COUNTRY_CATEGORY_ID);
+      if (nonCountryGroupCount > 0) next.add(CUSTOM_CATEGORY_ID);
       return next;
     });
-  }, [customProxyGroups.length]);
+  }, [customProxyGroups.length, countryGroups.length, nonCountryGroupCount]);
 
   const toggleCategory = (category: string) => {
     setExpandedCategories((prev) => {
@@ -306,7 +320,8 @@ export function ProxyGroupsCategories() {
   );
 
   const getCategoryStats = (category: string) => {
-    if (category === "custom") return `${customProxyGroups.length}`;
+    if (category === "country") return `${countryGroups.length}`;
+    if (category === "custom") return `${nonCountryGroupCount}`;
     const modules = modulesByCategory[category] || [];
     const enabled = modules.filter((m) =>
       enabledProxyGroups.includes(m.id),
@@ -389,7 +404,8 @@ export function ProxyGroupsCategories() {
             .map(([categoryId, categoryInfo]) => {
               const modules = modulesByCategory[categoryId] || [];
               const isCustomCategory = categoryId === "custom";
-              if (!isCustomCategory && modules.length === 0) return null;
+              const isCountryCategory = categoryId === "country";
+              if (!isCustomCategory && !isCountryCategory && modules.length === 0) return null;
 
               return (
                 <div
@@ -415,7 +431,7 @@ export function ProxyGroupsCategories() {
 
                   {expandedCategories.has(categoryId) && (
                     <div className="p-2 space-y-1">
-                      {!isCustomCategory ? (
+                      {!isCustomCategory && !isCountryCategory ? (
                         modules.map((module) => {
                           const display = resolveModuleDisplayName(module);
                           const isCore = module.category === "core";
@@ -643,6 +659,7 @@ export function ProxyGroupsCategories() {
                         })
                       ) : (
                         <ProxyGroupsCustomGroupsPanel
+                          mode={isCountryCategory ? "country" : "custom"}
                           advancedMode={proxyGroupAdvancedModeEnabled}
                           nodeCounts={generatedProxyGroupNodeCounts}
                         />

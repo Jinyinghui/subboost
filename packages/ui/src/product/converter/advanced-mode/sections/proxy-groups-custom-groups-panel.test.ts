@@ -168,7 +168,7 @@ const targetGroup = {
   groupType: "select",
 };
 
-function renderPanel(overrides: Record<number, unknown> = {}) {
+function renderPanel(overrides: Record<number, unknown> = {}, props: Record<string, unknown> = {}) {
   stateMock.enabled = true;
   stateMock.callIndex = 0;
   stateMock.overrides = overrides;
@@ -181,7 +181,7 @@ function renderPanel(overrides: Record<number, unknown> = {}) {
   mocks.captures.moveMenus = [];
   mocks.captures.settingsDialogs = [];
   try {
-    const html = renderToStaticMarkup(React.createElement(ProxyGroupsCustomGroupsPanel));
+    const html = renderToStaticMarkup(React.createElement(ProxyGroupsCustomGroupsPanel, props));
     return { html, setters: stateMock.setters };
   } finally {
     stateMock.enabled = false;
@@ -534,5 +534,43 @@ describe("ProxyGroupsCustomGroupsPanel", () => {
       description: "",
       groupType: "select",
     });
+  });
+
+  it("country mode lists only country groups with the country section, custom mode hides them", () => {
+    const countryGroup = {
+      id: "country-1",
+      name: "🇭🇰 香港节点",
+      emoji: "🇭🇰",
+      groupType: "url-test",
+      advanced: { regions: ["hk"] },
+    };
+    mocks.store.customProxyGroups = [countryGroup, customGroup, targetGroup];
+
+    const country = renderPanel({}, { mode: "country" });
+    expect(country.html).toContain("香港节点");
+    expect(country.html).toContain("国家分组");
+    expect(country.html).not.toContain("🧩 Custom");
+    expect(
+      mocks.captures.inputs.some(
+        (props: any) => props.placeholder === "描述文本（默认: 自定义代理组）",
+      ),
+    ).toBe(false);
+
+    const custom = renderPanel();
+    expect(custom.html).toContain("🧩 Custom");
+    expect(
+      mocks.captures.inputs.some(
+        (props: any) => props.placeholder === "描述文本（默认: 自定义代理组）",
+      ),
+    ).toBe(true);
+    expect(custom.html).not.toContain("香港节点");
+    expect(custom.html).not.toContain("国家分组");
+  });
+
+  it("shows a country empty state in country mode", () => {
+    mocks.store.customProxyGroups = [customGroup, targetGroup];
+    const { html } = renderPanel({}, { mode: "country" });
+    expect(html).toContain("暂无国家分组");
+    expect(html).not.toContain("暂无自定义分组");
   });
 });

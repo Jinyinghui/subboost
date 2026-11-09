@@ -48,7 +48,8 @@ export const CATEGORY_INFO: Record<string, { name: string; order: number }> = {
   tech: { name: "技术服务", order: 5 },
   finance: { name: "金融服务", order: 6 },
   other: { name: "其他", order: 7 },
-  custom: { name: "自定义分组", order: 8 },
+  country: { name: "国家分组", order: 8 },
+  custom: { name: "自定义分组", order: 9 },
 };
 
 export interface ProxyGroupGenerateOptions {
