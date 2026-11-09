@@ -70,4 +70,33 @@ describe("local home page adapter", () => {
     expect((fetch as any).mock.calls.at(-1)[0]).toBe("/api/subscriptions/sub%2F1");
     expect((fetch as any).mock.calls.at(-1)[1]).toEqual(expect.objectContaining({ method: "PUT" }));
   });
+
+  it("loads my templates for the home template picker", async () => {
+    const localAdapter = adapter();
+    const templatesApi = localAdapter.productApi.templates;
+
+    expect(templatesApi.catalogEnabled).toBe(true);
+    expect(templatesApi.labels?.catalogName).toBe("我的模板");
+
+    mocks.readJsonResponse.mockResolvedValueOnce({
+      templates: [{ id: "tpl-1", name: "My Template", description: "Work" }],
+    });
+    await expect(templatesApi.loadCatalogTemplates()).resolves.toEqual([
+      { id: "tpl-1", name: "My Template", description: "Work" },
+    ]);
+    expect(fetch).toHaveBeenCalledWith("/api/templates?type=my", { cache: "no-store" });
+
+    mocks.readJsonResponse.mockResolvedValueOnce({
+      template: { name: "My Template", kind: "config", config: { template: "standard" } },
+    });
+    await expect(templatesApi.loadTemplateDetail("tpl 1")).resolves.toEqual({
+      name: "My Template",
+      kind: "config",
+      config: { template: "standard" },
+    });
+    expect(fetch).toHaveBeenCalledWith("/api/templates/tpl%201", { cache: "no-store" });
+
+    (fetch as any).mockResolvedValueOnce({ status: 404, ok: false });
+    await expect(templatesApi.loadTemplateDetail("missing")).resolves.toBeNull();
+  });
 });

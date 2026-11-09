@@ -223,6 +223,8 @@ describe("TemplateLibrarySurface", () => {
       enabledProxyGroups: ["Auto"],
       hiddenProxyGroups: [],
       customProxyGroups: [],
+      proxyGroupAdvanced: { auto: { groupType: "url-test" } },
+      proxyGroupAdvancedModeEnabled: true,
       customRuleSets: [],
       builtinRuleEdits: {},
       customRules: [],
@@ -354,6 +356,8 @@ describe("TemplateLibrarySurface", () => {
           schema: "subboost-template-config/v1",
           template: "minimal",
           mixedPort: 7890,
+          proxyGroupAdvanced: { auto: { groupType: "url-test" } },
+          proxyGroupAdvancedModeEnabled: true,
         }),
       })
     );
