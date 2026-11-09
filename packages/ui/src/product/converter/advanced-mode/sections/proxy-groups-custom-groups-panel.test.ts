@@ -47,10 +47,14 @@ vi.mock("lucide-react", () => ({
   ChevronDown: () => null,
   ChevronRight: () => null,
   Pencil: () => null,
+  Plus: () => null,
   Shuffle: () => null,
   SlidersHorizontal: () => null,
   Trash2: () => null,
   X: () => null,
+}));
+vi.mock("@subboost/ui/components/ui/badge", () => ({
+  Badge: () => null,
 }));
 vi.mock("@subboost/ui/components/ui/button", () => ({
   Button: (props: any) => {
@@ -66,19 +70,23 @@ vi.mock("@subboost/ui/components/ui/input", () => ({
 }));
 vi.mock("@subboost/ui/components/ui/toaster", () => ({ toast: mocks.toast }));
 vi.mock("@subboost/ui/components/ui/confirm-dialog", () => ({ confirmDialog: mocks.confirmDialog }));
-vi.mock("@subboost/core/generator/proxy-groups", () => ({
-  PROXY_GROUP_MODULES: [
-    {
-      id: "auto",
-      name: "Auto",
-      rules: [{ id: "builtin-a", name: "Builtin A", behavior: "domain", path: "geosite/builtin-a.mrs" }],
-    },
-    { id: "fallback", name: "Fallback", rules: [] },
-    { id: "cn", name: "CN", rules: [
-      { id: "cn-ip", name: "CN IP", behavior: "ipcidr", path: "geoip/cn.mrs", noResolve: true },
-    ] },
-  ],
-}));
+vi.mock("@subboost/core/generator/proxy-groups", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@subboost/core/generator/proxy-groups")>();
+  return {
+    ...actual,
+    PROXY_GROUP_MODULES: [
+      {
+        id: "auto",
+        name: "Auto",
+        rules: [{ id: "builtin-a", name: "Builtin A", behavior: "domain", path: "geosite/builtin-a.mrs" }],
+      },
+      { id: "fallback", name: "Fallback", rules: [] },
+      { id: "cn", name: "CN", rules: [
+        { id: "cn-ip", name: "CN IP", behavior: "ipcidr", path: "geoip/cn.mrs", noResolve: true },
+      ] },
+    ],
+  };
+});
 vi.mock("@subboost/core/proxy-group-name", () => ({
   normalizeGroupNameWithDefaultEmoji: (raw: string, emoji: string) => ({ emoji, full: raw.startsWith(emoji) ? raw : `${emoji} ${raw}` }),
   resolveProxyGroupModuleName: (module: { name: string }, override?: string) => override || module.name,

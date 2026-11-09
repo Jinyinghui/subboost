@@ -26,6 +26,7 @@ import {
 } from "./proxy-group-rule-row";
 import type { ProxyGroupTypeMenuValue } from "./proxy-group-type-menu";
 import { ProxyGroupAdvancedPanel } from "./proxy-group-advanced-panel";
+import { CountryGroupsSection } from "./country-groups-section";
 import {
   buildProxyGroupName,
   parseProxyGroupNameDraft,
@@ -195,6 +196,9 @@ export function ProxyGroupsCustomGroupsPanel({
 
   return (
     <div className="space-y-2">
+      {/* 国家分组区（单独管理国家分组的筛选表达式与新增国家） */}
+      <CountryGroupsSection />
+
       {/* 新建自定义分组 */}
       <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5">
         <div className="grid min-w-0 grid-cols-[minmax(5.75rem,1fr)_minmax(0,1.47fr)] gap-1.5">

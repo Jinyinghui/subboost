@@ -80,9 +80,13 @@ vi.mock("lucide-react", () => ({
   ChevronDown: () => null,
   ChevronRight: () => null,
   Pencil: () => null,
+  Plus: () => null,
   SlidersHorizontal: () => null,
   Trash2: () => null,
   X: () => null,
+}));
+vi.mock("@subboost/ui/components/ui/badge", () => ({
+  Badge: () => null,
 }));
 vi.mock("@subboost/ui/components/ui/button", () => ({
   Button: (props: any) => {
@@ -91,12 +95,16 @@ vi.mock("@subboost/ui/components/ui/button", () => ({
   },
 }));
 vi.mock("@subboost/ui/components/ui/toaster", () => ({ toast: mocks.toast }));
-vi.mock("@subboost/core/generator/proxy-groups", () => ({
-  PROXY_GROUP_MODULES: [
-    { id: "auto", name: "Auto" },
-    { id: "fallback", name: "Fallback" },
-  ],
-}));
+vi.mock("@subboost/core/generator/proxy-groups", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@subboost/core/generator/proxy-groups")>();
+  return {
+    ...actual,
+    PROXY_GROUP_MODULES: [
+      { id: "auto", name: "Auto", rules: [] },
+      { id: "fallback", name: "Fallback", rules: [] },
+    ],
+  };
+});
 vi.mock("@subboost/core/proxy-group-name", () => ({
   resolveProxyGroupModuleName: (module: { name: string }, override?: string) => override || module.name,
 }));

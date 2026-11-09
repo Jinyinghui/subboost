@@ -214,10 +214,13 @@ describe("region filter derivation", () => {
     expect(buildRegionFilterRegex(["kr"])).toBe("(?i)韩|kr|korea");
   });
 
-  it("derives filters from keywords for other regions and combines them", () => {
-    expect(buildRegionFilterRegex(["de"])).toBe("(?i)德国|DE|Germany|Frankfurt|法兰克福");
-    expect(buildRegionFilterRegex(["ca"])).toBe("(?i)加拿大|CA|Canada|Toronto|多伦多");
-    expect(buildRegionFilterRegex(["nl"])).toBe("(?i)荷兰|NL|Netherlands");
+  it("uses local literals for all twelve preset regions and combines them", () => {
+    expect(buildRegionFilterRegex(["de"])).toBe("(?i)德|de|germany");
+    expect(buildRegionFilterRegex(["ca"])).toBe("(?i)加|ca|canada");
+    expect(buildRegionFilterRegex(["nl"])).toBe("(?i)荷|nl|netherlands");
+    expect(buildRegionFilterRegex(["uk"])).toBe("(?i)英|uk|united kingdom|great britain");
+    expect(buildRegionFilterRegex(["fr"])).toBe("(?i)法|fr|france");
+    expect(buildRegionFilterRegex(["au"])).toBe("(?i)澳|au|australia");
     expect(buildRegionFilterRegex(["hk", "tw"])).toBe("(?i)港|hk|hongkong|hong kong|台|tw|taiwan");
     expect(buildRegionFilterRegex(["other"])).toBeUndefined();
     expect(buildRegionFilterRegex([])).toBeUndefined();
@@ -228,7 +231,7 @@ describe("region filter derivation", () => {
       resolveProviderFilterFields({ includeRegex: "(?i)港|hk", excludeRegex: "过期" }, true)
     ).toEqual({ filter: "(?i)港|hk", "exclude-filter": "过期" });
     expect(resolveProviderFilterFields({ regions: ["de"] }, true)).toEqual({
-      filter: "(?i)德国|DE|Germany|Frankfurt|法兰克福",
+      filter: "(?i)德|de|germany",
     });
     expect(resolveProviderFilterFields({ regions: ["de"] }, false)).toEqual({});
     expect(resolveProviderFilterFields(undefined, true)).toEqual({});

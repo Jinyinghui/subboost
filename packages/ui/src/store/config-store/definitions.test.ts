@@ -42,6 +42,12 @@ describe("config store definitions", () => {
       "🇨🇳 台湾节点",
       "🇸🇬 狮城节点",
       "🇰🇷 韩国节点",
+      "🇬🇧 英国节点",
+      "🇫🇷 法国节点",
+      "🇦🇺 澳大利亚节点",
+      "🇩🇪 德国节点",
+      "🇨🇦 加拿大节点",
+      "🇳🇱 荷兰节点",
     ]);
     expect(initialState.customProxyGroups.every((group) => group.includeInGroupMembers)).toBe(true);
     expect(initialState.customProxyGroups.find((group) => group.id === "us")?.advanced?.tolerance).toBe(150);

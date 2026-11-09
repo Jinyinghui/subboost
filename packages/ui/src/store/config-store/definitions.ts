@@ -360,6 +360,12 @@ export const DEFAULT_COUNTRY_PROXY_GROUPS: CustomProxyGroup[] = [
   { id: "tw", name: "🇨🇳 台湾节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["tw"] } },
   { id: "sg", name: "🇸🇬 狮城节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["sg"] } },
   { id: "kr", name: "🇰🇷 韩国节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["kr"] } },
+  { id: "uk", name: "🇬🇧 英国节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["uk"] } },
+  { id: "fr", name: "🇫🇷 法国节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["fr"] } },
+  { id: "au", name: "🇦🇺 澳大利亚节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["au"] } },
+  { id: "de", name: "🇩🇪 德国节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["de"] } },
+  { id: "ca", name: "🇨🇦 加拿大节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["ca"] } },
+  { id: "nl", name: "🇳🇱 荷兰节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["nl"] } },
 ];
 
 export const initialState: ConfigState = {

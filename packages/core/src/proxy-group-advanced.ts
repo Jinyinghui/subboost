@@ -27,12 +27,12 @@ export const REGION_PRESETS: Array<{
   { id: "sg", label: "新加坡", emoji: "🇸🇬", keywords: ["新加坡", "SG", "Singapore", "狮城"], filter: "(?i)新|狮城|sg|singapore" },
   { id: "tw", label: "台湾", emoji: "🇹🇼", keywords: ["台湾", "TW", "Taiwan", "台北"], filter: "(?i)台|tw|taiwan" },
   { id: "kr", label: "韩国", emoji: "🇰🇷", keywords: ["韩国", "KR", "Korea", "首尔"], filter: "(?i)韩|kr|korea" },
-  { id: "uk", label: "英国", emoji: "🇬🇧", keywords: ["英国", "UK", "United Kingdom", "London", "伦敦"] },
-  { id: "de", label: "德国", emoji: "🇩🇪", keywords: ["德国", "DE", "Germany", "Frankfurt", "法兰克福"] },
-  { id: "fr", label: "法国", emoji: "🇫🇷", keywords: ["法国", "FR", "France", "Paris", "巴黎"] },
-  { id: "ca", label: "加拿大", emoji: "🇨🇦", keywords: ["加拿大", "CA", "Canada", "Toronto", "多伦多"] },
-  { id: "nl", label: "荷兰", emoji: "🇳🇱", keywords: ["荷兰", "NL", "Netherlands"] },
-  { id: "au", label: "澳大利亚", emoji: "🇦🇺", keywords: ["澳大利亚", "AU", "Australia", "Sydney", "悉尼"] },
+  { id: "uk", label: "英国", emoji: "🇬🇧", keywords: ["英国", "UK", "United Kingdom", "London", "伦敦"], filter: "(?i)英|uk|united kingdom|great britain" },
+  { id: "de", label: "德国", emoji: "🇩🇪", keywords: ["德国", "DE", "Germany", "Frankfurt", "法兰克福"], filter: "(?i)德|de|germany" },
+  { id: "fr", label: "法国", emoji: "🇫🇷", keywords: ["法国", "FR", "France", "Paris", "巴黎"], filter: "(?i)法|fr|france" },
+  { id: "ca", label: "加拿大", emoji: "🇨🇦", keywords: ["加拿大", "CA", "Canada", "Toronto", "多伦多"], filter: "(?i)加|ca|canada" },
+  { id: "nl", label: "荷兰", emoji: "🇳🇱", keywords: ["荷兰", "NL", "Netherlands"], filter: "(?i)荷|nl|netherlands" },
+  { id: "au", label: "澳大利亚", emoji: "🇦🇺", keywords: ["澳大利亚", "AU", "Australia", "Sydney", "悉尼"], filter: "(?i)澳|au|australia" },
   { id: "other", label: "其他", emoji: "🌐", keywords: [] },
 ];
 
@@ -95,7 +95,7 @@ function matchesRegion(nodeName: string, regions: NodeRegion[]): boolean {
   return false;
 }
 
-function escapeRegexLiteral(value: string): string {
+export function escapeRegexLiteral(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 

@@ -1,3 +1,15 @@
+# SubBoost v2.11.9
+
+## 中文
+
+- 分流代理组配置里新增独立的“国家分组”区：新建配置默认预置 12 个国家（香港、日本、美国、台湾、新加坡、韩国、英国、法国、澳大利亚、德国、加拿大、荷兰），名字与表达式沿用本地配置格式（如美国 🇺🇲、台湾 🇨🇳、新加坡“狮城节点”，美国容差 150）；每行直接改该国的筛选表达式，清空后恢复按地区自动派生；新增国家时按填的名字自动生成表达式（对得上已知地区用该地区的预设表达式，对不上先生成 `(?i)名字`），生成后可二次修改；重名会提示，不会重复添加。国家分组仍是普通自定义分组，改名、规则、高级设置见下方自定义分组。
+- 英国、法国、澳大利亚、德国、加拿大、荷兰的地区表达式补为本地格式（如德国 `(?i)德|de|germany`）。
+
+## English
+
+- The proxy-group config now has a dedicated "Country groups" section: a new config presets 12 countries (Hong Kong, Japan, US, Taiwan, Singapore, Korea, UK, France, Australia, Germany, Canada, Netherlands) with names and expressions following the local config format (e.g. US 🇺🇲, Taiwan 🇨🇳, Singapore "狮城节点", US tolerance 150); each row edits that country's filter expression inline, and clearing it falls back to the region-derived one; adding a country auto-generates its expression from the typed name (a known region uses its preset expression, otherwise `(?i)<name>` is generated first), editable afterwards; duplicates are warned about instead of added. Country groups remain ordinary custom groups — rename, rules and advanced settings live in the custom-group cards below.
+- Region expressions for the UK, France, Australia, Germany, Canada and Netherlands now use the local format (e.g. Germany `(?i)德|de|germany`).
+
 # SubBoost v2.11.8
 
 ## 中文
