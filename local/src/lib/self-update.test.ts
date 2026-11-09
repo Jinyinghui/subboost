@@ -216,9 +216,11 @@ describe("self-update lib", () => {
     const { unlinkSync, writeFileSync } = await import("node:fs");
     files.set("/ops", "");
     files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
-    vi.mocked(writeFileSync).mockImplementation((path: string, data: string) => {
-      if (path.endsWith("update-status.json")) throw new Error("disk full");
-      files.set(path, data);
+    vi.mocked(writeFileSync).mockImplementation((path, data) => {
+      if (typeof path === "string" && path.endsWith("update-status.json")) {
+        throw new Error("disk full");
+      }
+      files.set(path as string, data as string);
     });
     try {
       requestSelfUpdate("admin-1", "2.11.3");
@@ -235,9 +237,11 @@ describe("self-update lib", () => {
     const { unlinkSync, writeFileSync } = await import("node:fs");
     files.set("/ops", "");
     files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
-    vi.mocked(writeFileSync).mockImplementation((path: string, data: string) => {
-      if (path.endsWith("update-status.json")) throw new Error("disk full");
-      files.set(path, data);
+    vi.mocked(writeFileSync).mockImplementation((path, data) => {
+      if (typeof path === "string" && path.endsWith("update-status.json")) {
+        throw new Error("disk full");
+      }
+      files.set(path as string, data as string);
     });
     vi.mocked(unlinkSync).mockImplementationOnce(() => {
       throw new Error("unlink failed");
