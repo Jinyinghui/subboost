@@ -108,4 +108,43 @@ describe("local system update route", () => {
     expect(response.status).toBe(503);
     await expect(response.json()).resolves.toMatchObject({ code: "CONFIGURATION_ERROR" });
   });
+
+  it("rethrows unexpected errors from the update request", async () => {
+    mocks.requestUpdate.mockImplementation(() => {
+      throw new Error("boom");
+    });
+    const request = new Request("http://local.subboost.test/api/system/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetVersion: "2.11.3" }),
+    });
+    await expect(POST(request)).rejects.toThrow("boom");
+  });
+
+  it("requests the latest version when the body is empty", async () => {
+    const request = new Request("http://local.subboost.test/api/system/update", {
+      method: "POST",
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(202);
+    expect(mocks.requestUpdate).toHaveBeenCalledWith("admin-1", null);
+  });
+
+  it("requests the latest version when the target version is not a string", async () => {
+    const request = new Request("http://local.subboost.test/api/system/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ targetVersion: 123 }),
+    });
+    const response = await POST(request);
+    expect(response.status).toBe(202);
+    expect(mocks.requestUpdate).toHaveBeenCalledWith("admin-1", null);
+  });
+
+  it("returns 401 without checking when there is no admin", async () => {
+    mocks.admin.mockResolvedValueOnce(Response.json({}, { status: 401 }));
+    const response = await GET();
+    expect(response.status).toBe(401);
+    expect(mocks.fetchLatest).not.toHaveBeenCalled();
+  });
 });

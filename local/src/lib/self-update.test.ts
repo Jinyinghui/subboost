@@ -166,11 +166,248 @@ describe("self-update lib", () => {
     });
   });
 
+  it("reports a conflict when the request file already exists", () => {
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    files.set("/ops/update-requested.json", JSON.stringify({ state: "requested" }));
+    try {
+      requestSelfUpdate("admin-1", "2.11.3");
+      expect.unreachable();
+    } catch (error) {
+      expect((error as SelfUpdateError).status).toBe(409);
+    }
+  });
+
+  it("reports a conflict when the request write collides", async () => {
+    const { writeFileSync } = await import("node:fs");
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    vi.mocked(writeFileSync).mockImplementationOnce(() => {
+      const error = new Error("EEXIST") as NodeJS.ErrnoException;
+      error.code = "EEXIST";
+      throw error;
+    });
+    try {
+      requestSelfUpdate("admin-1", "2.11.3");
+      expect.unreachable();
+    } catch (error) {
+      expect((error as SelfUpdateError).status).toBe(409);
+      expect((error as SelfUpdateError).code).toBe("CONFLICT");
+    }
+  });
+
+  it("reports an unwritable ops directory when the request write fails", async () => {
+    const { writeFileSync } = await import("node:fs");
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    vi.mocked(writeFileSync).mockImplementationOnce(() => {
+      throw new Error("EACCES");
+    });
+    try {
+      requestSelfUpdate("admin-1", "2.11.3");
+      expect.unreachable();
+    } catch (error) {
+      expect((error as SelfUpdateError).status).toBe(503);
+      expect((error as SelfUpdateError).code).toBe("CONFIGURATION_ERROR");
+    }
+  });
+
+  it("cleans up the request when the status write fails", async () => {
+    const { unlinkSync, writeFileSync } = await import("node:fs");
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    vi.mocked(writeFileSync).mockImplementation((path: string, data: string) => {
+      if (path.endsWith("update-status.json")) throw new Error("disk full");
+      files.set(path, data);
+    });
+    try {
+      requestSelfUpdate("admin-1", "2.11.3");
+      expect.unreachable();
+    } catch (error) {
+      expect((error as SelfUpdateError).status).toBe(500);
+      expect((error as SelfUpdateError).code).toBe("INTERNAL_ERROR");
+    }
+    expect(files.has("/ops/update-requested.json")).toBe(false);
+    expect(vi.mocked(unlinkSync)).toHaveBeenCalledWith("/ops/update-requested.json");
+  });
+
+  it("keeps the request when even the cleanup fails", async () => {
+    const { unlinkSync, writeFileSync } = await import("node:fs");
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    vi.mocked(writeFileSync).mockImplementation((path: string, data: string) => {
+      if (path.endsWith("update-status.json")) throw new Error("disk full");
+      files.set(path, data);
+    });
+    vi.mocked(unlinkSync).mockImplementationOnce(() => {
+      throw new Error("unlink failed");
+    });
+    try {
+      requestSelfUpdate("admin-1", "2.11.3");
+      expect.unreachable();
+    } catch (error) {
+      expect((error as SelfUpdateError).status).toBe(500);
+    }
+  });
+
+  it("treats malformed watcher and status files as absent", () => {
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", "{not json");
+    files.set("/ops/update-status.json", JSON.stringify({ state: "weird" }));
+    const result = readUpdateStatus();
+    expect(result.watcherEnabled).toBe(false);
+    expect(result.status.state).toBe("idle");
+  });
+
+  it("fails closed before fetching when the current version is not stable", async () => {
+    process.env.APP_RELEASE_VERSION = "2.11.2-beta.1";
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(fetchLatestRelease({ fresh: true })).resolves.toEqual({
+      currentVersion: "2.11.2-beta.1",
+      latestVersion: null,
+      latestTag: null,
+      releaseUrl: null,
+      hasUpdate: false,
+    });
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps a non-GitHub release manifest URL as the release link", async () => {
+    process.env.SUBBOOST_RELEASE_URL = "https://example.com/releases/release.json";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => releaseResponse({ version: "2.11.3" }))
+    );
+    await expect(fetchLatestRelease({ fresh: true })).resolves.toEqual({
+      currentVersion: "2.11.2",
+      latestVersion: "2.11.3",
+      latestTag: "v2.11.3",
+      releaseUrl: "https://example.com/releases/release.json",
+      hasUpdate: true,
+    });
+  });
+
+  it("reports no update when the release manifest has no version", async () => {
+    process.env.SUBBOOST_RELEASE_URL =
+      "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json";
+    vi.stubGlobal("fetch", vi.fn(async () => releaseResponse({ image: "ghcr.io/jinyinghui/subboost" })));
+    await expect(fetchLatestRelease({ fresh: true })).resolves.toMatchObject({
+      latestVersion: null,
+      hasUpdate: false,
+    });
+  });
+
   it("reports no update when the release manifest cannot be fetched", async () => {
     process.env.SUBBOOST_RELEASE_URL =
       "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json";
     vi.stubGlobal("fetch", vi.fn(async () => releaseResponse({}, 404)));
     await expect(fetchLatestRelease({ fresh: true })).resolves.toEqual({
+      currentVersion: "2.11.2",
+      latestVersion: null,
+      latestTag: null,
+      releaseUrl: null,
+      hasUpdate: false,
+    });
+  });
+
+  it("defaults to the /ops directory when no override is set", () => {
+    delete process.env.SUBBOOST_OPS_DIR;
+    const result = readUpdateStatus();
+    expect(result.watcherEnabled).toBe(false);
+    expect(result.status.state).toBe("idle");
+  });
+
+  it("checks the fork release manifest without forcing a fresh fetch", async () => {
+    process.env.SUBBOOST_RELEASE_URL =
+      "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => releaseResponse({ version: "2.11.3", image: "ghcr.io/jinyinghui/subboost:v2.11.3" }))
+    );
+    await expect(fetchLatestRelease()).resolves.toEqual({
+      currentVersion: "2.11.2",
+      latestVersion: "2.11.3",
+      latestTag: "v2.11.3",
+      releaseUrl: "https://github.com/Jinyinghui/subboost/releases/tag/v2.11.3",
+      hasUpdate: true,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json",
+      expect.objectContaining({ next: { revalidate: 3600 } })
+    );
+  });
+
+  it("forces a fresh upstream check when asked", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        releaseResponse({
+          tag_name: "v2.11.3",
+          html_url: "https://github.com/SubBoost/subboost/releases/tag/v2.11.3",
+        })
+      )
+    );
+    await expect(fetchLatestRelease({ fresh: true })).resolves.toMatchObject({
+      latestVersion: "2.11.3",
+      hasUpdate: true,
+    });
+    expect(fetch).toHaveBeenCalledWith(
+      "https://api.github.com/repos/SubBoost/subboost/releases/latest",
+      expect.objectContaining({ cache: "no-store" })
+    );
+  });
+
+  it("reads succeeded and failed states", () => {
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    files.set("/ops/update-status.json", JSON.stringify({ state: "succeeded" }));
+    expect(readUpdateStatus().status.state).toBe("succeeded");
+    files.set("/ops/update-status.json", JSON.stringify({ state: "failed", message: "boom" }));
+    const result = readUpdateStatus();
+    expect(result.status.state).toBe("failed");
+    expect(result.status.message).toBe("boom");
+  });
+
+  it("reports no update when the release manifest is not an object", async () => {
+    process.env.SUBBOOST_RELEASE_URL =
+      "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json";
+    vi.stubGlobal("fetch", vi.fn(async () => releaseResponse([])));
+    await expect(fetchLatestRelease({ fresh: true })).resolves.toMatchObject({
+      latestVersion: null,
+      hasUpdate: false,
+    });
+  });
+
+  it("reports no update when the release manifest is malformed JSON", async () => {
+    process.env.SUBBOOST_RELEASE_URL =
+      "https://github.com/Jinyinghui/subboost/releases/latest/download/release.json";
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{not json", { status: 200 })));
+    await expect(fetchLatestRelease({ fresh: true })).resolves.toMatchObject({
+      latestVersion: null,
+      hasUpdate: false,
+    });
+  });
+
+  it("reports no update when the upstream API returns a non-object", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => releaseResponse([])));
+    await expect(fetchLatestRelease()).resolves.toMatchObject({
+      latestVersion: null,
+      hasUpdate: false,
+    });
+  });
+
+  it("reports no update when the upstream API returns malformed JSON", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{not json", { status: 200 })));
+    await expect(fetchLatestRelease()).resolves.toMatchObject({
+      latestVersion: null,
+      hasUpdate: false,
+    });
+  });
+
+  it("reports no update when the upstream API is unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => releaseResponse({ message: "rate limited" }, 403)));
+    await expect(fetchLatestRelease()).resolves.toEqual({
       currentVersion: "2.11.2",
       latestVersion: null,
       latestTag: null,

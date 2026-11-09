@@ -72,9 +72,9 @@ export default function SettingsPage() {
     const state = updateInfo?.status.state;
     if (state !== "requested" && state !== "running") return undefined;
     let cancelled = false;
-    let timer = 0;
+    let timer: ReturnType<typeof setTimeout> | undefined;
     const tick = () => {
-      timer = window.setTimeout(() => {
+      timer = setTimeout(() => {
         void loadUpdateInfo(true).finally(() => {
           if (!cancelled) tick();
         });
@@ -83,7 +83,7 @@ export default function SettingsPage() {
     tick();
     return () => {
       cancelled = true;
-      window.clearTimeout(timer);
+      if (timer !== undefined) clearTimeout(timer);
     };
   }, [updateInfo?.status.state, loadUpdateInfo]);
 
