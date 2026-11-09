@@ -74,8 +74,8 @@ describe("public core generator extra branch coverage", () => {
     });
     expect(groups.find((group) => group.name === "Custom URL")).toMatchObject({
       type: "url-test",
-      use: ["remote-provider"],
     });
+    expect(groups.find((group) => group.name === "Custom URL")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "LB Filter")).toMatchObject({
       type: "load-balance",
       strategy: "consistent-hashing",

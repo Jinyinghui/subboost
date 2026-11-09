@@ -19,6 +19,8 @@ function countryGroup(id: string, name: string, regions: NodeRegion[], tolerance
     groupType: "url-test",
     advanced: {
       regions,
+      // 国家分组明确挂 use:（默认不挂）；本文件的用例验证的是挂 use: 时的本地格式输出
+      useProviders: true,
       ...(tolerance !== undefined ? { tolerance } : {}),
     },
   };
@@ -80,7 +82,7 @@ describe("provider-mode local format", () => {
           name: "🚀 手动切换",
           emoji: "",
           groupType: "select",
-          advanced: { providerOnly: true },
+          advanced: { providerOnly: true, useProviders: true },
         },
       ],
     });
@@ -90,20 +92,21 @@ describe("provider-mode local format", () => {
     expect(manual).not.toHaveProperty("proxies");
 
     const select = groups.find((group) => group.name === "🚀 节点选择");
-    expect(select).toMatchObject({ type: "select", use: ["my_sub"] });
+    expect(select).toMatchObject({ type: "select" });
+    expect(select).not.toHaveProperty("use");
 
     const auto = groups.find((group) => group.name === "⚡ 自动选择");
     expect(auto).toMatchObject({
       type: "url-test",
-      use: ["my_sub"],
       tolerance: 50,
       url: "https://www.gstatic.com/generate_204",
       interval: 300,
     });
+    expect(auto).not.toHaveProperty("use");
     expect(auto).not.toHaveProperty("proxies");
   });
 
-  it("attaches use: to all groups by default and honors per-group opt-out", () => {
+  it("attaches use: only when a group explicitly opts in, and honors per-group opt-out", () => {
     const groups = generateProxyGroups({
       nodes: [],
       proxyProviderNames: ["my_sub"],
@@ -130,11 +133,11 @@ describe("provider-mode local format", () => {
       ],
     });
 
-    expect(groups.find((group) => group.name === "Custom plain")).toMatchObject({ use: ["my_sub"] });
+    expect(groups.find((group) => group.name === "Custom plain")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "Custom forced")).toMatchObject({ use: ["my_sub"] });
     expect(groups.find((group) => group.name === "Custom opt-out")).not.toHaveProperty("use");
-    expect(groups.find((group) => group.name === "🤖 AI 服务")).toMatchObject({ use: ["my_sub"] });
-    expect(groups.find((group) => group.name === "🚀 节点选择")).toMatchObject({ use: ["my_sub"] });
+    expect(groups.find((group) => group.name === "🤖 AI 服务")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "🚀 节点选择")).not.toHaveProperty("use");
   });
 
   it("honors per-group opt-out of use: on node-consuming groups", () => {
@@ -160,6 +163,33 @@ describe("provider-mode local format", () => {
     expect(group).toMatchObject({ type: "url-test", tolerance: 50 });
     expect(group).not.toHaveProperty("use");
     expect(group).not.toHaveProperty("filter");
+  });
+
+  it("leaves country groups without use: by default until they opt in", () => {
+    const groups = generateProxyGroups({
+      nodes: [],
+      proxyProviderNames: ["my_sub"],
+      enabledModules: ["select", "auto"],
+      ruleProviderBaseUrl: "https://rules.example.com",
+      testUrl: "https://www.gstatic.com/generate_204",
+      testInterval: 300,
+      customProxyGroups: [
+        {
+          id: "hk",
+          name: "🇭🇰 香港节点",
+          emoji: "",
+          memberSource: "filtered-nodes",
+          includeInGroupMembers: true,
+          groupType: "url-test",
+          advanced: { regions: ["hk"] },
+        },
+      ],
+    });
+
+    const hk = groups.find((group) => group.name === "🇭🇰 香港节点");
+    expect(hk).toMatchObject({ type: "url-test", tolerance: 50 });
+    expect(hk).not.toHaveProperty("use");
+    expect(hk).not.toHaveProperty("filter");
   });
 
   it("keeps inline node members in url-test groups while filtering provider nodes", () => {

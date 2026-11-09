@@ -2,6 +2,7 @@ import {
   REGION_PRESETS,
   buildRegionFilterRegex,
   escapeRegexLiteral,
+  isCountryProxyGroup,
   normalizeProxyGroupAdvancedConfig,
 } from "@subboost/core/proxy-group-advanced";
 import type {
@@ -11,16 +12,7 @@ import type {
 } from "@subboost/core/types/config";
 import { DEFAULT_COUNTRY_PROXY_GROUPS } from "@subboost/ui/store/config-store/definitions";
 
-/**
- * 国家分组：本质上仍是自定义代理组（url-test，按表达式筛节点），只是在
- * “国家分组”区里单独管理。判断条件不依赖 memberSource——YAML 模板读回的
- * 分组不带 memberSource 字段，仍应认作国家分组。
- */
-export function isCountryProxyGroup(group: CustomProxyGroup): boolean {
-  if (group.groupType !== "url-test") return false;
-  const advanced = normalizeProxyGroupAdvancedConfig(group.advanced);
-  return (advanced.regions?.length ?? 0) > 0 || Boolean(advanced.includeRegex?.trim());
-}
+export { isCountryProxyGroup } from "@subboost/core/proxy-group-advanced";
 
 /** 该国家组当前生效的表达式：自定义表达式优先，否则由地区派生。 */
 export function resolveCountryGroupExpression(group: CustomProxyGroup): string {

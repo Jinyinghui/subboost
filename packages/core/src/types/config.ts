@@ -279,7 +279,7 @@ export interface ProxyGroupAdvancedConfig {
   tolerance?: number;
   // 仅从订阅 provider 取节点，不列出任何显式成员（用于“手动切换”类 select 组）
   providerOnly?: boolean;
-  // 该组是否挂 use:（订阅 provider）：true 始终挂、false 从不挂、未设置按组类型自动判断
+  // 该组是否挂 use:（订阅 provider）：true 始终挂、false 从不挂、未设置默认不挂
   useProviders?: boolean;
 }
 

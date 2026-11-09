@@ -320,7 +320,7 @@ describe("ProxyGroupAdvancedPanel", () => {
     expect(html).toContain("订阅 provider（use:）");
     expect(html).toContain("始终挂 use:");
     expect(html).toContain("从不挂 use:");
-    expect(html).toContain("默认给所有分组挂 use:");
+    expect(html).toContain("默认不挂 use:");
     expect(html).toContain("容差 tolerance");
     expect(html).toContain("仅从订阅取节点");
     expect(html).toContain("(?i)港|hk|hongkong|hong kong");
@@ -399,7 +399,18 @@ describe("ProxyGroupAdvancedPanel", () => {
   it("normalizes advanced member helpers without rendering the panel", () => {
     const nodes = [node("US Source")];
     const moduleNames = { auto: "Auto", select: "Select" };
-    const customProxyGroups = [{ id: "media", name: "Media", emoji: "", groupType: "select" as const }];
+    const customProxyGroups = [
+      { id: "media", name: "Media", emoji: "", groupType: "select" as const },
+      {
+        id: "hk",
+        name: "🇭🇰 香港节点",
+        emoji: "",
+        memberSource: "filtered-nodes" as const,
+        includeInGroupMembers: true,
+        groupType: "url-test" as const,
+        advanced: { regions: ["hk" as const] },
+      },
+    ];
     const options = { nodes, moduleNames, customProxyGroups };
 
     const direct = buildMemberFromName("DIRECT", options);
@@ -407,6 +418,7 @@ describe("ProxyGroupAdvancedPanel", () => {
     const nodeMember = buildMemberFromName("US Source", options);
     const moduleMember = buildMemberFromName("Auto", options);
     const customMember = buildMemberFromName("Media", options);
+    const countryMember = buildMemberFromName("🇭🇰 香港节点", options);
 
     expect(buildMemberFromName(" ", options)).toBeNull();
     expect(buildMemberFromName("Missing", options)).toBeNull();
@@ -420,6 +432,8 @@ describe("ProxyGroupAdvancedPanel", () => {
     expect(memberKindLabel(nodeMember as ResolvedMember)).toBe("节点");
     expect(memberKindLabel(moduleMember as ResolvedMember)).toBe("内置组");
     expect(memberKindLabel(customMember as ResolvedMember)).toBe("自定义组");
+    expect(memberKindLabel(customMember as ResolvedMember, customProxyGroups)).toBe("自定义组");
+    expect(memberKindLabel(countryMember as ResolvedMember, customProxyGroups)).toBe("国家分组");
     expect(memberKindLabel(direct as ResolvedMember)).toBe("直连");
     expect(memberKindLabel(reject as ResolvedMember)).toBe("拒绝");
   });

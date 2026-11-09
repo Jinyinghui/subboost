@@ -278,6 +278,17 @@ export function normalizeProxyGroupAdvancedConfig(value: unknown): ProxyGroupAdv
   };
 }
 
+/**
+ * 国家分组：本质上仍是自定义代理组（url-test，按表达式筛节点），只是在
+ * “国家分组”区里单独管理。判断条件不依赖 memberSource——YAML 模板读回的
+ * 分组不带 memberSource 字段，仍应认作国家分组。
+ */
+export function isCountryProxyGroup(group: CustomProxyGroup): boolean {
+  if (group.groupType !== "url-test") return false;
+  const advanced = normalizeProxyGroupAdvancedConfig(group.advanced);
+  return (advanced.regions?.length ?? 0) > 0 || Boolean(advanced.includeRegex?.trim());
+}
+
 function buildMemberFromName(
   name: string,
   options: {

@@ -1,3 +1,17 @@
+# SubBoost v2.11.13
+
+## 中文
+
+- 分流代理组的 `use:` 默认改为从不挂：只有在组的高级设置里把“订阅 provider（use:）”明确选为“始终挂 use:”的组才会挂 `use:`，其余分组默认都不挂；之前已明确设为“始终挂”的组不受影响。无订阅 provider（内联节点模式）时行为不变。注意：订阅模式下靠 provider 节点筛成员的组（如国家分组、自动选择）需要挂 `use:` 才有成员和 `filter:`，不挂时会是空组——这类组请在卡片里单独选“始终挂 use:”。另外，生成器现在不再输出空的 `proxies: []`（以前只对挂 `use:` 的组省略）。
+- 已启用成员列表里，国家分组的成员标签现在显示为“国家分组”，不再显示为“自定义组”。
+- 去掉了所有分组高级设置里的“地区”选择：地区筛选现在只通过表达式（国家分组区的表达式输入框，或“包含正则”）来设置；已保存配置里的地区数据不受影响，仍会按原来的表达式参与生成。
+
+## English
+
+- `use:` is no longer attached to proxy groups by default: only groups whose advanced setting explicitly selects "always attach use:" get `use:`; every other group defaults to not attaching it. Groups already set to "always attach" are unaffected, and inline-node mode is unchanged. Note: in provider mode, groups that take members from the provider (e.g. country groups, auto-select) need `use:` to have members and `filter:` — without it they generate as empty groups, so select "always attach use:" on those cards. The generator also no longer emits empty `proxies: []` for any group (previously only omitted for groups with `use:`).
+- In the enabled-members list, country groups now carry the "国家分组" tag instead of "自定义组".
+- Removed the region picker from every group's advanced settings: region filtering is now done through expressions only (the expression input in the country-groups section, or "include regex"). Regions already saved in a config are untouched and still contribute to generation as before.
+
 # SubBoost v2.11.12
 
 ## 中文

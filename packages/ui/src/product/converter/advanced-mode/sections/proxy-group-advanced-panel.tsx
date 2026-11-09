@@ -12,14 +12,13 @@ import { toast } from "@subboost/ui/components/ui/toaster";
 import { cn } from "@subboost/ui/lib/utils";
 import { PROXY_GROUP_MODULES, generateProxyGroups } from "@subboost/core/generator/proxy-groups";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
-import { REGION_PRESETS, resolveProviderFilterFields } from "@subboost/core/proxy-group-advanced";
+import { isCountryProxyGroup, resolveProviderFilterFields } from "@subboost/core/proxy-group-advanced";
 import { getProxyGroupMemberKey } from "@subboost/core/proxy-group-targets";
 import { resolveNodeNameFilter } from "@subboost/core/subscription/node-name-filter";
 import { getNodeSourceIds } from "@subboost/core/subscription/node-source-state";
 import { isSubscriptionInfoNodeName } from "@subboost/core/subscription/info-node-name";
 import type {
   CustomProxyGroup,
-  NodeRegion,
   ProxyGroupAdvancedConfig,
   ProxyGroupMemberRef,
 } from "@subboost/core/types/config";
@@ -58,14 +57,19 @@ export function memberLabel(member: ResolvedMember): string {
   return member.name;
 }
 
-export function memberKindLabel(member: ResolvedMember): string {
+export function memberKindLabel(member: ResolvedMember, customProxyGroups?: readonly CustomProxyGroup[]): string {
   switch (member.kind) {
     case "node":
       return "节点";
     case "module":
       return "内置组";
-    case "custom":
+    case "custom": {
+      const customId = member.ref.kind === "custom" ? member.ref.id : undefined;
+      const group =
+        customId === undefined ? undefined : customProxyGroups?.find((item) => item.id === customId);
+      if (group && isCountryProxyGroup(group)) return "国家分组";
       return "自定义组";
+    }
     case "direct":
       return "直连";
     case "reject":
@@ -346,7 +350,6 @@ export function ProxyGroupAdvancedPanel({
   );
 
   const sourceIds = normalizeList(advanced.sourceIds);
-  const regions = normalizeList(advanced.regions);
   const effectiveGroupType = React.useMemo(() => {
     if (target.kind === "custom") {
       const group = customProxyGroups.find((item) => item.id === target.id);
@@ -474,7 +477,7 @@ export function ProxyGroupAdvancedPanel({
   const restoreDefaultMembers = React.useCallback(async () => {
     const confirmed = await confirmDialog({
       title: "恢复默认成员？",
-      description: "将清除当前代理组的手动添加、排除和排序。导入源、地区、正则筛选及分流规则不会改变。",
+      description: "将清除当前代理组的手动添加、排除和排序。导入源、正则筛选及分流规则不会改变。",
       confirmText: "恢复",
       variant: "warning",
     });
@@ -484,7 +487,7 @@ export function ProxyGroupAdvancedPanel({
 
   return (
     <div className="border-t border-ink/10">
-      <div className="grid gap-0 md:grid-cols-[1fr_1fr_1fr]">
+      <div className="grid gap-0 md:grid-cols-[1fr_1fr]">
         <div className="p-3">
           <div className={ADVANCED_PANEL_TITLE_CLASS}>导入源</div>
           <div className="max-h-52 space-y-1.5 overflow-y-auto pr-1 custom-scrollbar">
@@ -505,28 +508,6 @@ export function ProxyGroupAdvancedPanel({
             )}
           </div>
           <div className="mt-1 text-[10px] text-fg-35">不选择表示匹配所有导入源</div>
-        </div>
-
-        <div className="relative p-3 before:absolute before:bottom-3 before:left-0 before:top-3 before:w-px before:bg-ink/10">
-          <div className={ADVANCED_PANEL_TITLE_CLASS}>地区</div>
-          <ChoiceGroup label="地区筛选" className="gap-1.5">
-            {REGION_PRESETS.map((region) => {
-              const active = regions.includes(region.id);
-              return (
-                <ChoiceChip
-                  key={region.id}
-                  label={`${region.emoji} ${region.label}`}
-                  selected={active}
-                  onClick={() => onChange({ regions: toggleValue(regions, region.id as NodeRegion) })}
-                  className={cn(
-                    "min-h-0 rounded px-2 py-1 text-[10px]",
-                    active && "border-indigo-400/40 bg-indigo-500/20 text-indigo-100",
-                  )}
-                />
-              );
-            })}
-          </ChoiceGroup>
-          <div className="mt-1 text-[10px] text-fg-35">不选择表示匹配所有地区</div>
         </div>
 
         <div className="relative space-y-3 p-3 before:absolute before:bottom-3 before:left-0 before:top-3 before:w-px before:bg-ink/10">
@@ -578,7 +559,7 @@ export function ProxyGroupAdvancedPanel({
               className="min-h-0 rounded px-2 py-1 text-[10px]"
             />
           </ChoiceGroup>
-          <div className="mt-1 text-[10px] text-fg-35">默认给所有分组挂 use:（如需某组不挂，选“从不挂 use:”）</div>
+          <div className="mt-1 text-[10px] text-fg-35">默认不挂 use:（如需某组挂，选“始终挂 use:”）</div>
         </div>
         {effectiveGroupType === "url-test" ? (
           <div>
@@ -682,7 +663,7 @@ export function ProxyGroupAdvancedPanel({
                   <div className="truncate text-fg-75" title={memberLabel(member)}>
                     {memberLabel(member)}
                   </div>
-                  <div className="text-[10px] text-fg-35">{memberKindLabel(member)}</div>
+                  <div className="text-[10px] text-fg-35">{memberKindLabel(member, activeCustomProxyGroups)}</div>
                 </div>
                 <Button
                   type="button"

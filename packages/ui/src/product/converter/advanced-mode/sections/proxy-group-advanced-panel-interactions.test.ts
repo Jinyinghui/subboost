@@ -182,13 +182,12 @@ describe("ProxyGroupAdvancedPanel interactions", () => {
     ]);
   });
 
-  it("fires native source, region, member, and drag callbacks", () => {
+  it("fires native source, member, and drag callbacks", () => {
     const onChange = vi.fn();
     const tree = ProxyGroupAdvancedPanel({
       target: { kind: "custom", id: "media", name: "Media" },
       advanced: {
         sourceIds: ["source-a"],
-        regions: ["us"],
         includeRegex: "Source",
         excludeRegex: "Japan",
         excludedMembers: [{ kind: "reject" }],
@@ -200,15 +199,11 @@ describe("ProxyGroupAdvancedPanel interactions", () => {
     const elements = flattenElements(tree);
     const sourceCheckboxes = elements.filter((element) => element.type === "input" && element.props.type === "checkbox");
     const textInputs = elements.filter((element) => element.type === "input" && element.props.type !== "checkbox");
-    const regionButtons = elements.filter(
-      (element) => element.type === "button" && typeof element.props["aria-pressed"] === "boolean",
-    );
     const includedRows = elements.filter((element) => element.props.draggable);
     const excludeButton = elements.find((element) => element.type === "button" && element.props.title === "排除");
     const enableButton = elements.find((element) => element.type === "button" && element.props.title === "REJECT");
 
     sourceCheckboxes[1].props.onChange();
-    regionButtons[1].props.onClick();
     textInputs[0].props.onChange({ target: { value: "IEPL" } });
     textInputs[1].props.onChange({ target: { value: "Test" } });
     includedRows[0].props.onDragStart();
@@ -219,7 +214,6 @@ describe("ProxyGroupAdvancedPanel interactions", () => {
     enableButton?.props.onClick();
 
     expect(onChange).toHaveBeenCalledWith({ sourceIds: ["source-a", "source-b"] });
-    expect(onChange).toHaveBeenCalledWith({ regions: ["us", "hk"] });
     expect(onChange).toHaveBeenCalledWith({ includeRegex: "IEPL" });
     expect(onChange).toHaveBeenCalledWith({ excludeRegex: "Test" });
     expect(onChange).toHaveBeenCalledWith(expect.objectContaining({ memberOrder: expect.any(Array) }));
@@ -421,7 +415,7 @@ describe("ProxyGroupAdvancedPanel interactions", () => {
 
     expect(mocks.confirmDialog).toHaveBeenLastCalledWith({
       title: "恢复默认成员？",
-      description: "将清除当前代理组的手动添加、排除和排序。导入源、地区、正则筛选及分流规则不会改变。",
+      description: "将清除当前代理组的手动添加、排除和排序。导入源、正则筛选及分流规则不会改变。",
       confirmText: "恢复",
       variant: "warning",
     });

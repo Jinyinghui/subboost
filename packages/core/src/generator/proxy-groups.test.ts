@@ -75,9 +75,9 @@ describe("proxy group generator", () => {
 
     expect(groups.find((group) => group.name === "Custom url")).toMatchObject({
       type: "url-test",
-      use: ["remote"],
       lazy: false,
     });
+    expect(groups.find((group) => group.name === "Custom url")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "Custom fallback")).toMatchObject({ type: "fallback" });
     expect(groups.find((group) => group.name === "Custom balance")).toMatchObject({
       type: "load-balance",
@@ -92,8 +92,8 @@ describe("proxy group generator", () => {
     expect(rejectProxies).not.toContain("Node B");
     expect(groups.find((group) => group.name.includes("节点选择"))).toMatchObject({
       type: "select",
-      use: ["remote"],
     });
+    expect(groups.find((group) => group.name.includes("节点选择"))).not.toHaveProperty("use");
   });
 
   it("generates providers and template metadata helpers", () => {
@@ -235,13 +235,13 @@ describe("proxy group generator", () => {
       "Node A",
       "Filtered",
     ]);
-    expect(groups.find((group) => group.name === "Filtered Group")).toMatchObject({ use: ["remote"] });
+    expect(groups.find((group) => group.name === "Filtered Group")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "Filtered Group")?.proxies).not.toContain("Custom normal");
     expect(groups.find((group) => group.name === "Filtered Group")?.proxies).not.toContain("🚀 节点选择");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("Filtered Group");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("🚀 节点选择");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("Custom normal");
-    expect(groups.find((group) => group.name === "Custom normal")).toMatchObject({ use: ["remote"] });
+    expect(groups.find((group) => group.name === "Custom normal")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).not.toContain("Filtered Group");
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).not.toContain("Custom normal");
     expect(groups.find((group) => group.name === "🏠 私有网络")?.proxies?.slice(0, 5)).toEqual([
@@ -299,21 +299,22 @@ describe("proxy group generator", () => {
     expect(groups.find((group) => group.name === "Filtered URL")).toMatchObject({
       type: "url-test",
       proxies: ["Node A"],
-      use: ["remote"],
-      filter: "Node A",
     });
+    expect(groups.find((group) => group.name === "Filtered URL")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "Filtered URL")).not.toHaveProperty("filter");
     expect(groups.find((group) => group.name === "Filtered Fallback")).toMatchObject({
       type: "fallback",
       proxies: ["Node A", "Node B"],
-      use: ["remote"],
     });
+    expect(groups.find((group) => group.name === "Filtered Fallback")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "Filtered Balance")).toMatchObject({
       type: "load-balance",
       strategy: "consistent-hashing",
       proxies: ["Node A", "Node B"],
-      use: ["remote"],
     });
-    expect(groups.at(-1)).toMatchObject({ name: "Custom inline", use: ["remote"] });
+    expect(groups.find((group) => group.name === "Filtered Balance")).not.toHaveProperty("use");
+    expect(groups.at(-1)).toMatchObject({ name: "Custom inline" });
+    expect(groups.at(-1)).not.toHaveProperty("use");
   });
 
   it("omits disabled custom groups from groups, providers, names, and custom rules", () => {
@@ -444,9 +445,9 @@ describe("proxy group generator", () => {
     });
     expect(groups.find((group) => group.name.includes("AI"))).toMatchObject({
       type: "url-test",
-      use: ["remote"],
     });
-    // 仅用 use: 取节点时不输出空的 proxies: []
+    expect(groups.find((group) => group.name.includes("AI"))).not.toHaveProperty("use");
+    // 空 proxies 一律不输出（不论是否挂 use:）
     expect(groups.find((group) => group.name.includes("AI"))).not.toHaveProperty("proxies");
     // regions 只有 other 时派生不出 filter
     expect(groups.find((group) => group.name.includes("AI"))).not.toHaveProperty("filter");

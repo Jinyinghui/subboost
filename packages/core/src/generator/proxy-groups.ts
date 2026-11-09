@@ -138,14 +138,15 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
   /**
    * 该组是否挂 use:（订阅 provider）。
    * - 每组高级配置可单独指定（useProviders：true 始终挂、false 从不挂）
-   * - 默认全部挂：所有分组类型都挂 use:；仅当 useProviders 明确为 false 时不挂。
-   *   注意：select 组挂 use: 后，provider 的全部节点也会作为该组的直接成员出现。
+   * - 默认不挂：仅当 useProviders 明确为 true 时挂 use:。
+   *   注意：订阅模式下靠 provider 节点筛成员的组（如国家分组、自动选择）需要挂 use:
+   *   才有成员和 filter:；不挂时生成的是空组，需在组卡片里单独选“始终挂 use:”。
    */
   const resolveUseForGroup = (
     advanced: ProxyGroupAdvancedConfig | undefined
   ): Record<string, unknown> => {
     const normalized = normalizeProxyGroupAdvancedConfig(advanced);
-    if (normalized.useProviders === false) return {};
+    if (normalized.useProviders !== true) return {};
     return providerUse;
   };
   /**
@@ -505,14 +506,10 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
     }
   }
 
-  // 仅用 use: 从 provider 取节点的组不输出空的 proxies: []（与本地配置格式一致）
+  // 空的 proxies: [] 不输出（挂 use: 的组从 provider 取节点，其余空组本身就没有成员；
+  // 与本地配置格式一致）
   for (const group of groups) {
-    if (
-      Array.isArray(group.proxies) &&
-      group.proxies.length === 0 &&
-      Array.isArray(group.use) &&
-      group.use.length > 0
-    ) {
+    if (Array.isArray(group.proxies) && group.proxies.length === 0) {
       delete group.proxies;
     }
   }
