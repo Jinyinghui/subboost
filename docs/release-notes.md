@@ -1,3 +1,17 @@
+# SubBoost v2.11.1
+
+## 中文
+
+- 修复模板上传丢失内置代理组高级设置的问题：上传模板现在会完整保存各内置分组的高级配置（组类型、负载均衡策略、筛选条件、成员排序等），应用模板后不再还原为默认配置。
+- 首页“选择模板”新增“我的模板”入口，可直接选用自己保存的模板。
+
+## English
+
+- Fix template uploads dropping builtin proxy-group advanced settings: uploads now preserve each builtin group's advanced configuration (group type, load-balance strategy, filters, member order), so applying a template no longer resets them to defaults.
+- Add a "My Templates" entry to the home template picker for applying saved templates.
+
+---
+
 # SubBoost v2.11.0
 
 ## 中文
