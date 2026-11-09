@@ -320,6 +320,7 @@ describe("ProxyGroupAdvancedPanel", () => {
     expect(html).toContain("订阅 provider（use:）");
     expect(html).toContain("始终挂 use:");
     expect(html).toContain("从不挂 use:");
+    expect(html).toContain("默认给所有分组挂 use:");
     expect(html).toContain("容差 tolerance");
     expect(html).toContain("仅从订阅取节点");
     expect(html).toContain("(?i)港|hk|hongkong|hong kong");

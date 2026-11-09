@@ -138,20 +138,15 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
   /**
    * 该组是否挂 use:（订阅 provider）。
    * - 每组高级配置可单独指定（useProviders：true 始终挂、false 从不挂）
-   * - 默认只给消费节点的组挂：url-test/fallback/load-balance、仅 provider 取节点的组；
-   *   其余组（服务组、节点选择、按节点筛选的 select 组等）默认不挂——
-   *   select 组挂 use: 会把 provider 的全部节点都加进来，违背“只取筛选出的节点”的本意
+   * - 默认全部挂：所有分组类型都挂 use:；仅当 useProviders 明确为 false 时不挂。
+   *   注意：select 组挂 use: 后，provider 的全部节点也会作为该组的直接成员出现。
    */
   const resolveUseForGroup = (
-    groupType: ProxyGroupGroupType,
     advanced: ProxyGroupAdvancedConfig | undefined
   ): Record<string, unknown> => {
     const normalized = normalizeProxyGroupAdvancedConfig(advanced);
     if (normalized.useProviders === false) return {};
-    if (normalized.useProviders === true) return providerUse;
-    if (normalized.providerOnly) return providerUse;
-    if (groupType === "url-test" || groupType === "fallback" || groupType === "load-balance") return providerUse;
-    return {};
+    return providerUse;
   };
   /**
    * 该组挂到 provider 上时的附加字段：use: +（测速/兜底组）filter/exclude-filter。
@@ -161,7 +156,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
     groupType: ProxyGroupGroupType,
     advanced: ProxyGroupAdvancedConfig | undefined
   ): Record<string, unknown> => {
-    const use = resolveUseForGroup(groupType, advanced);
+    const use = resolveUseForGroup(advanced);
     if (!("use" in use)) return use;
     if (groupType !== "url-test" && groupType !== "fallback" && groupType !== "load-balance") return use;
     return { ...use, ...resolveProviderFilterFields(advanced, hasProviders) };

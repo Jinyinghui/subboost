@@ -92,9 +92,8 @@ describe("proxy group generator", () => {
     expect(rejectProxies).not.toContain("Node B");
     expect(groups.find((group) => group.name.includes("节点选择"))).toMatchObject({
       type: "select",
+      use: ["remote"],
     });
-    // 节点选择本身不消费节点：默认不挂 use:（本地配置亦然）
-    expect(groups.find((group) => group.name.includes("节点选择"))).not.toHaveProperty("use");
   });
 
   it("generates providers and template metadata helpers", () => {
@@ -236,13 +235,13 @@ describe("proxy group generator", () => {
       "Node A",
       "Filtered",
     ]);
-    expect(groups.find((group) => group.name === "Filtered Group")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "Filtered Group")).toMatchObject({ use: ["remote"] });
     expect(groups.find((group) => group.name === "Filtered Group")?.proxies).not.toContain("Custom normal");
     expect(groups.find((group) => group.name === "Filtered Group")?.proxies).not.toContain("🚀 节点选择");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("Filtered Group");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("🚀 节点选择");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("Custom normal");
-    expect(groups.find((group) => group.name === "Custom normal")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "Custom normal")).toMatchObject({ use: ["remote"] });
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).not.toContain("Filtered Group");
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).not.toContain("Custom normal");
     expect(groups.find((group) => group.name === "🏠 私有网络")?.proxies?.slice(0, 5)).toEqual([
@@ -314,8 +313,7 @@ describe("proxy group generator", () => {
       proxies: ["Node A", "Node B"],
       use: ["remote"],
     });
-    expect(groups.at(-1)).toMatchObject({ name: "Custom inline" });
-    expect(groups.at(-1)).not.toHaveProperty("use");
+    expect(groups.at(-1)).toMatchObject({ name: "Custom inline", use: ["remote"] });
   });
 
   it("omits disabled custom groups from groups, providers, names, and custom rules", () => {

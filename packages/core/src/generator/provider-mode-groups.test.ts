@@ -90,8 +90,7 @@ describe("provider-mode local format", () => {
     expect(manual).not.toHaveProperty("proxies");
 
     const select = groups.find((group) => group.name === "🚀 节点选择");
-    expect(select).toMatchObject({ type: "select" });
-    expect(select).not.toHaveProperty("use");
+    expect(select).toMatchObject({ type: "select", use: ["my_sub"] });
 
     const auto = groups.find((group) => group.name === "⚡ 自动选择");
     expect(auto).toMatchObject({
@@ -104,7 +103,7 @@ describe("provider-mode local format", () => {
     expect(auto).not.toHaveProperty("proxies");
   });
 
-  it("keeps use: off service select groups by default but honors per-group override", () => {
+  it("attaches use: to all groups by default and honors per-group opt-out", () => {
     const groups = generateProxyGroups({
       nodes: [],
       proxyProviderNames: ["my_sub"],
@@ -121,12 +120,21 @@ describe("provider-mode local format", () => {
           groupType: "select",
           advanced: { useProviders: true },
         },
+        {
+          id: "optout",
+          name: "Custom opt-out",
+          emoji: "",
+          groupType: "select",
+          advanced: { useProviders: false },
+        },
       ],
     });
 
-    expect(groups.find((group) => group.name === "Custom plain")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "Custom plain")).toMatchObject({ use: ["my_sub"] });
     expect(groups.find((group) => group.name === "Custom forced")).toMatchObject({ use: ["my_sub"] });
-    expect(groups.find((group) => group.name === "🤖 AI 服务")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "Custom opt-out")).not.toHaveProperty("use");
+    expect(groups.find((group) => group.name === "🤖 AI 服务")).toMatchObject({ use: ["my_sub"] });
+    expect(groups.find((group) => group.name === "🚀 节点选择")).toMatchObject({ use: ["my_sub"] });
   });
 
   it("honors per-group opt-out of use: on node-consuming groups", () => {

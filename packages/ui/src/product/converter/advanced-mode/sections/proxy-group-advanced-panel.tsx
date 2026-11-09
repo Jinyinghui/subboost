@@ -578,7 +578,7 @@ export function ProxyGroupAdvancedPanel({
               className="min-h-0 rounded px-2 py-1 text-[10px]"
             />
           </ChoiceGroup>
-          <div className="mt-1 text-[10px] text-fg-35">默认只给消费节点的组（测速/兜底/按节点筛选）挂 use:</div>
+          <div className="mt-1 text-[10px] text-fg-35">默认给所有分组挂 use:（如需某组不挂，选“从不挂 use:”）</div>
         </div>
         {effectiveGroupType === "url-test" ? (
           <div>

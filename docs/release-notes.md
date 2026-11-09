@@ -1,3 +1,13 @@
+# SubBoost v2.11.11
+
+## 中文
+
+- 分流代理组的 `use:` 默认改为全部挂：所有分组（测速/兜底/负载均衡/服务组/节点选择/自定义分组等）在有订阅 provider 时默认都挂 `use:`，不再只给消费节点的组挂；如需某组不挂，在该组的高级设置里把“订阅 provider（use:）”选为“从不挂 use:”即可，之前已明确设为“从不”的组不受影响。无订阅 provider（内联节点模式）时行为不变。
+
+## English
+
+- `use:` is now attached to all proxy groups by default: whenever a subscription provider exists, every group (url-test, fallback, load-balance, service groups, node selection, custom groups, etc.) gets `use:` instead of only node-consuming groups; to exclude a group, set its "Subscription provider (use:)" to "Never attach use:" in that group's advanced settings — groups already set to never are unaffected. Behavior is unchanged when there is no subscription provider (inline-node mode).
+
 # SubBoost v2.11.10
 
 ## 中文
