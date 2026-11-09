@@ -111,7 +111,19 @@ download_to_temp() {
   case "$url" in
     file://*) cp "${url#file://}" "$output" ;;
     /*) cp "$url" "$output" ;;
-    http://*|https://*) curl -fsSL "$url" -o "$output" ;;
+    http://*|https://*)
+      # GitHub 偶发 504/连接失败：重试 3 次，前两次静默、最后一次输出 curl 错误到日志
+      local attempt
+      for attempt in 1 2 3; do
+        if [ "$attempt" -lt 3 ]; then
+          curl -fsSL "$url" -o "$output" 2>/dev/null && return 0
+        else
+          curl -fsSL "$url" -o "$output" && return 0
+        fi
+        sleep 2
+      done
+      return 1
+      ;;
     *) cp "$url" "$output" ;;
   esac
 }
@@ -532,7 +544,7 @@ update_cmd() {
     say "Detected old fixed release update source; switching updates to stable latest."
     release_url="$DEFAULT_STABLE_RELEASE_URL"
   fi
-  if [ -n "$release_url" ] && download_to_temp "$release_url" "$release_file" 2>/dev/null; then
+  if [ -n "$release_url" ] && download_to_temp "$release_url" "$release_file"; then
     image="$(json_get image "$release_file" || true)"
     compose_url="$(resolve_url "$release_url" "$(json_get composeUrl "$release_file" || true)")"
     manager_url="$(resolve_url "$release_url" "$(json_get managerUrl "$release_file" || true)")"

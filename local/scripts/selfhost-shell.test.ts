@@ -42,6 +42,48 @@ describe("self-host shell scripts", () => {
     );
   });
 
+  it("retries http downloads in download_to_temp before failing", () => {
+    const result = runBash(`
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      source local/scripts/subboost.sh
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      attempts_file="$home/attempts"
+      printf '0\\n' > "$attempts_file"
+      curl() {
+        count="$(cat "$attempts_file")"
+        count=$((count + 1))
+        printf '%s\\n' "$count" > "$attempts_file"
+        if [ "$count" -lt 3 ]; then return 22; fi
+        printf 'downloaded\\n' > "$4"
+        return 0
+      }
+      sleep() { :; }
+      download_to_temp "https://example.com/release.json" "$home/release.json"
+      printf 'attempts=%s\\n' "$(cat "$attempts_file")"
+      printf 'content=%s\\n' "$(cat "$home/release.json")"
+      printf '0\\n' > "$attempts_file"
+      curl() {
+        count="$(cat "$attempts_file")"
+        count=$((count + 1))
+        printf '%s\\n' "$count" > "$attempts_file"
+        return 22
+      }
+      if download_to_temp "https://example.com/release.json" "$home/fail.json"; then
+        printf 'unexpected-success\\n'
+      else
+        printf 'failed-as-expected attempts=%s\\n' "$(cat "$attempts_file")"
+      fi
+    `);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("attempts=3");
+    expect(result.stdout).toContain("content=downloaded");
+    expect(result.stdout).toContain("failed-as-expected attempts=3");
+    expect(result.stdout).not.toContain("unexpected-success");
+  });
+
   it("uses prompt defaults without /dev/tty errors in non-interactive mode", () => {
     const result = runBash(`
       set -Eeuo pipefail

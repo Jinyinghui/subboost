@@ -1,3 +1,13 @@
+# SubBoost v2.11.7
+
+## 中文
+
+- 更新下载更耐网络波动：下载清单、compose 与 manager 文件时失败会自动重试 3 次（间隔 2 秒），GitHub 偶发 504 不会一次就让更新走降级分支；最后一次失败的 curl 错误会写进更新日志，不再被吞掉，方便定位是网络问题还是地址问题。
+
+## English
+
+- Updates are now resilient to flaky downloads: fetching the release manifest, compose file and manager retries up to 3 times (2s apart), so a transient GitHub 504 no longer drops the update into the fallback branch; the final curl error is written to the update log instead of being swallowed, making it clear whether the failure is network or URL related.
+
 # SubBoost v2.11.6
 
 ## 中文

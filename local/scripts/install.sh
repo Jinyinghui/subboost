@@ -119,7 +119,17 @@ download_to_temp() {
       cp "$url" "$output"
       ;;
     http://*|https://*)
-      curl -fsSL "$url" -o "$output"
+      # GitHub 偶发 504/连接失败：重试 3 次，前两次静默、最后一次输出 curl 错误到日志
+      local attempt
+      for attempt in 1 2 3; do
+        if [ "$attempt" -lt 3 ]; then
+          curl -fsSL "$url" -o "$output" 2>/dev/null && return 0
+        else
+          curl -fsSL "$url" -o "$output" && return 0
+        fi
+        sleep 2
+      done
+      return 1
       ;;
     *)
       cp "$url" "$output"
