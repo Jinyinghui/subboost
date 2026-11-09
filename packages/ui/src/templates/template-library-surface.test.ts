@@ -236,7 +236,7 @@ describe("TemplateLibrarySurface", () => {
       allowLan: false,
       testUrl: "https://example.com",
       testInterval: 300,
-      ruleProviderBaseUrl: "",
+      ruleProviderBaseUrl: "https://rules.example.com",
       cnIpNoResolve: false,
       experimentalCnUseCnRuleSet: false,
       setTemplate: vi.fn(),
@@ -269,7 +269,8 @@ describe("TemplateLibrarySurface", () => {
     expect(adapter.interactions.templateUploadOpened).toHaveBeenCalledWith({ entry: "templatesPage" });
     expect(setters[6]).toHaveBeenCalledWith(true);
     expect(setters[7]).toHaveBeenCalledWith("");
-    expect(setters[12]).toHaveBeenCalledWith("config");
+    // 模板库入口默认打开 YAML 上传模式
+    expect(setters[12]).toHaveBeenCalledWith("yaml");
   });
 
   it("applies builtin, config, yaml, missing, and failing templates", async () => {
@@ -363,9 +364,36 @@ describe("TemplateLibrarySurface", () => {
     );
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "模板上传成功！", variant: "success" }));
 
-    renderSurface(adapter, { 6: true, 7: "Yaml", 12: "yaml" });
+    renderSurface(adapter, {
+      6: true,
+      7: "Yaml",
+      12: "yaml",
+      13: "proxy-groups:\n  - name: 流媒体\n    type: select\n    proxies: []\nrules:\n  - DOMAIN-SUFFIX,example.com,流媒体\n",
+    });
     await mocks.captures.uploadDialog.onUpload();
-    expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "YAML 模板上传开发中", variant: "info" }));
+    expect(adapter.uploadTemplate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: "Yaml",
+        config: expect.objectContaining({
+          template: "minimal",
+          customProxyGroups: expect.arrayContaining([
+            expect.objectContaining({ name: "流媒体", groupType: "select" }),
+          ]),
+          customRules: expect.arrayContaining([
+            expect.objectContaining({ type: "DOMAIN-SUFFIX", value: "example.com", target: "流媒体" }),
+          ]),
+        }),
+      }),
+    );
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining("已导入 1 个分组、1 条规则"), variant: "success" }),
+    );
+
+    renderSurface(adapter, { 6: true, 7: "Bad Yaml", 12: "yaml", 13: "a: [unclosed" });
+    await mocks.captures.uploadDialog.onUpload();
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining("YAML 解析失败"), variant: "destructive" }),
+    );
 
     adapter.uploadTemplate.mockRejectedValueOnce(new Error("upload failed"));
     renderSurface(adapter, { 6: true, 7: "Broken", 12: "config" });
@@ -381,6 +409,52 @@ describe("TemplateLibrarySurface", () => {
     renderSurface(privateAdapter, { 2: "my", 6: true, 7: "Private", 9: true, 10: false });
     await mocks.captures.uploadDialog.onUpload();
     expect(privateAdapter.loadTemplates).toHaveBeenCalledWith("my");
+  });
+
+  it("does not open the upload dialog when uploading is disabled", () => {
+    const { setters } = renderSurface(createAdapter({ allowUpload: false }), {
+      0: "work",
+      1: "work",
+      2: "catalog",
+      3: templates,
+    });
+
+    mocks.captures.buttons[0].onClick();
+    expect(setters[6]).not.toHaveBeenCalled();
+  });
+
+  it("reports ignored nodes and warnings after a yaml upload", async () => {
+    const adapter = createAdapter();
+    renderSurface(adapter, {
+      6: true,
+      7: "Yaml With Nodes",
+      12: "yaml",
+      13: "proxies:\n  - { name: HK-01, type: ss, server: 1.2.3.4, port: 8388, cipher: aes-256-gcm, password: secret }\nproxy-groups:\n  - name: 选我\n    type: select\n    proxies: [HK-01]\n  - name: 坏组\n    type: dns\n    proxies: []\nrules:\n  - DOMAIN-SUFFIX,example.com,选我\n",
+    });
+    await mocks.captures.uploadDialog.onUpload();
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining("已忽略 1 个节点"), variant: "success" }),
+    );
+    expect(mocks.toast).toHaveBeenCalledWith(
+      expect.objectContaining({ title: expect.stringContaining("部分内容未导入"), variant: "warning" }),
+    );
+  });
+
+  it("reports a generic error when yaml conversion throws a non-error", async () => {
+    const yamlTemplate = await import("@subboost/core/templates/yaml-template");
+    const spy = vi.spyOn(yamlTemplate, "convertClashYamlToTemplate").mockImplementationOnce(() => {
+      throw "boom";
+    });
+    try {
+      const adapter = createAdapter();
+      renderSurface(adapter, { 6: true, 7: "Boom", 12: "yaml", 13: "mixed-port: 7890" });
+      await mocks.captures.uploadDialog.onUpload();
+      expect(mocks.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ title: "YAML 解析失败", variant: "destructive" }),
+      );
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("renders loading, empty, disabled tabs, and guest upload states", () => {

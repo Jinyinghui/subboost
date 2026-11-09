@@ -89,6 +89,7 @@ vi.mock("lucide-react", () => ({
   AlertCircle: () => null,
   Check: () => null,
   ChevronDown: () => null,
+  ChevronRight: () => null,
   ChevronUp: () => null,
   CircleHelp: () => null,
   FileCode: () => null,
@@ -269,7 +270,7 @@ describe("advanced mode InputSection", () => {
   });
 
   it("renders source summaries, errors, add controls, and the expanded editor", () => {
-    renderSection({ 0: true, 1: "s1" });
+    renderSection({ 0: true, 1: "s1", 3: new Set() });
 
     expect(mocks.captures.header).toEqual(expect.objectContaining({ title: "节点导入", isExpanded: true }));
     expect(mocks.captures.errorBadge).toEqual(expect.objectContaining({ errorMessage: "parse failed" }));
@@ -284,8 +285,28 @@ describe("advanced mode InputSection", () => {
     expect(mocks.captures.addSourceMenus[0]).toEqual(expect.objectContaining({ open: true, compact: true }));
   });
 
+  it("collapses non-url sources by default and expands them on toggle", () => {
+    const { html, setters } = renderSection();
+
+    expect(mocks.captures.inputs.some((props: any) => props.value === "https://example.com/sub")).toBe(true);
+    expect(mocks.captures.textareas).toHaveLength(0);
+    expect(html).toContain("已填写 1 行，点击展开查看");
+    const expandButton = mocks.captures.iconButtons.find((props: any) => props.label === "展开");
+    expect(expandButton).toBeDefined();
+    expandButton.onClick();
+    expect(setters[3].lastValue instanceof Set).toBe(true);
+    expect((setters[3].lastValue as Set<string>).has("s2")).toBe(false);
+  });
+
+  it("shows the collapse toggle for expanded non-url sources", () => {
+    renderSection({ 3: new Set() });
+
+    expect(mocks.captures.iconButtons.some((props: any) => props.label === "折叠")).toBe(true);
+    expect(mocks.captures.textareas.some((props: any) => props.value === "ss://node")).toBe(true);
+  });
+
   it("updates source content and metadata through captured fields", () => {
-    renderSection({ 1: "s1" });
+    renderSection({ 1: "s1", 3: new Set() });
 
     const mainUrlInput = mocks.captures.inputs.find((props: any) => props.placeholder === "https://example.com/sub");
     mainUrlInput.onChange({ target: { value: "https://new.example/sub" } });

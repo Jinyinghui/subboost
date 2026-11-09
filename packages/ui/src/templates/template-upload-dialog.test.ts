@@ -122,7 +122,7 @@ describe("TemplateUploadDialog", () => {
   it("renders config upload controls and forwards visibility changes", () => {
     const { html, props } = renderDialog();
 
-    expect(html).toContain("上传模板");
+    expect(html).toContain("保存模板");
     expect(html).toContain("配置模板");
     expect(html).toContain("私有模板");
     expect(html).toContain("仅自己可见和使用");
@@ -131,7 +131,7 @@ describe("TemplateUploadDialog", () => {
     mocks.inputs[0].onChange({ target: { value: "New template" } });
     mocks.textareas[0].onChange({ target: { value: "New description" } });
     mocks.choiceChips.find((chip) => chip.label === "配置模板").onClick();
-    mocks.choiceChips.find((chip) => chip.label === "YAML（开发中）").onClick();
+    mocks.choiceChips.find((chip) => chip.label === "YAML 文件").onClick();
     mocks.switchFields[0].onCheckedChange(true);
     mocks.switchFields[1].onCheckedChange(true);
     mocks.buttons.at(-2).onClick();
@@ -158,7 +158,8 @@ describe("TemplateUploadDialog", () => {
       showVisibilityControls: false,
     });
 
-    expect(html).toContain("YAML 模板上传开发中。");
+    expect(html).toContain("上传 YAML 模板");
+    expect(html).toContain("上传本地 YAML 文件或粘贴内容");
     expect(html).toContain("配置内容（YAML）");
     expect(html).toContain("loader-icon");
     expect(html).not.toContain("公开模板");
@@ -172,6 +173,82 @@ describe("TemplateUploadDialog", () => {
       isUploading: false,
     });
     expect(mocks.buttons.at(-1)).toEqual(expect.objectContaining({ disabled: false }));
+  });
+
+  it("reads a selected yaml file into content and names the template from it", async () => {
+    const { props } = renderDialog({ mode: "yaml", name: "", yamlContent: "" });
+
+    const fileInput = mocks.inputs.find((input) => input.type === "file");
+    expect(fileInput).toBeDefined();
+    expect(fileInput.accept).toContain(".yaml");
+    await fileInput.onChange({
+      target: {
+        files: [{ name: "my-config.yaml", text: async () => "mixed-port: 7890" }],
+        value: "C:\\fakepath\\my-config.yaml",
+      },
+    });
+
+    expect(props.onYamlContentChange).toHaveBeenCalledWith("mixed-port: 7890");
+    expect(props.onNameChange).toHaveBeenCalledWith("my-config");
+  });
+
+  it("does not overwrite an existing template name when a yaml file is selected", async () => {
+    const { props } = renderDialog({ mode: "yaml", name: "Already named", yamlContent: "" });
+
+    const fileInput = mocks.inputs.find((input) => input.type === "file");
+    await fileInput.onChange({
+      target: {
+        files: [{ name: "other.yaml", text: async () => "mixed-port: 7890" }],
+        value: "C:\\fakepath\\other.yaml",
+      },
+    });
+
+    expect(props.onYamlContentChange).toHaveBeenCalledWith("mixed-port: 7890");
+    expect(props.onNameChange).not.toHaveBeenCalled();
+  });
+
+  it("ignores a file selection without a file", async () => {
+    const { props } = renderDialog({ mode: "yaml", name: "", yamlContent: "" });
+
+    const fileInput = mocks.inputs.find((input) => input.type === "file");
+    await fileInput.onChange({ target: { files: [], value: "" } });
+
+    expect(props.onYamlContentChange).not.toHaveBeenCalled();
+    expect(props.onNameChange).not.toHaveBeenCalled();
+  });
+
+  it("falls back to a default name for extension-only yaml files", async () => {
+    const { props } = renderDialog({ mode: "yaml", name: "", yamlContent: "" });
+
+    const fileInput = mocks.inputs.find((input) => input.type === "file");
+    await fileInput.onChange({
+      target: {
+        files: [{ name: ".yaml", text: async () => "mixed-port: 7890" }],
+        value: "C:\\fakepath\\.yaml",
+      },
+    });
+
+    expect(props.onYamlContentChange).toHaveBeenCalledWith("mixed-port: 7890");
+    expect(props.onNameChange).toHaveBeenCalledWith("YAML 导入模板");
+  });
+
+  it("opens the file picker from the yaml file button", () => {
+    renderDialog({ mode: "yaml" });
+
+    const pickerButton = mocks.buttons.find(
+      (button: any) => Array.isArray(button.children) && button.children.includes("选择 YAML 文件"),
+    );
+    expect(pickerButton).toBeDefined();
+    pickerButton.onClick();
+  });
+
+  it("turns off the default-template switch without touching visibility", () => {
+    const { props } = renderDialog({ asDefault: true, isPublic: true });
+
+    mocks.switchFields[0].onCheckedChange(false);
+    expect(props.onDefaultChange).toHaveBeenCalledWith(false);
+    expect(props.onPublicChange).not.toHaveBeenCalled();
+    expect(props.onModeChange).not.toHaveBeenCalled();
   });
 
   it("renders non-admin public visibility without default controls", () => {

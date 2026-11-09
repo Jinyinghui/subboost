@@ -1,5 +1,6 @@
 "use client";
 
+import { useRef, useState } from "react";
 import { Globe, Loader2, Lock, Upload } from "lucide-react";
 import { Button } from "@subboost/ui/components/ui/button";
 import { ChoiceChip, ChoiceGroup } from "@subboost/ui/components/ui/choice-group";
@@ -66,6 +67,25 @@ export function TemplateUploadDialog({
     : isPublic
       ? "其他用户可以搜索和使用此模板"
       : "仅自己可见和使用";
+  const [yamlFileName, setYamlFileName] = useState("");
+  const yamlFileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleYamlFileChange = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setYamlFileName(file.name);
+    try {
+      const text = await file.text();
+      onYamlContentChange(text);
+      if (!name.trim()) {
+        const baseName = file.name.replace(/\.(yaml|yml|txt)$/i, "").trim();
+        onNameChange(baseName || "YAML 导入模板");
+      }
+    } catch {
+      // 文件读取失败时保持原内容不变
+    }
+    event.target.value = "";
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -73,10 +93,12 @@ export function TemplateUploadDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Upload className="h-5 w-5 text-primary-500" />
-            上传模板
+            {mode === "yaml" ? "上传 YAML 模板" : "保存模板"}
           </DialogTitle>
           <DialogDescription>
-            推荐使用“配置模板”：仅保存生成策略（不包含节点），可被一键应用到配置器。
+            {mode === "yaml"
+              ? "上传本地 Clash YAML 配置，导入分组、规则与 DNS（不含节点），生成可一键应用的配置模板。"
+              : "推荐使用“配置模板”：仅保存生成策略（不包含节点），可被一键应用到配置器。"}
           </DialogDescription>
         </DialogHeader>
 
@@ -110,9 +132,8 @@ export function TemplateUploadDialog({
               />
               <ChoiceChip
                 selected={mode === "yaml"}
-                label="YAML（开发中）"
+                label="YAML 文件"
                 onClick={() => onModeChange("yaml")}
-                disabled
               />
             </ChoiceGroup>
             {mode === "config" ? (
@@ -120,7 +141,9 @@ export function TemplateUploadDialog({
                 将保存你当前的配置器设置（模板/分组/规则/DNS/自定义分流/中转等），不包含节点，可直接“使用”应用到配置器。
               </p>
             ) : (
-              <p className="text-xs text-fg-50">YAML 模板上传开发中。</p>
+              <p className="text-xs text-fg-50">
+                上传本地 YAML 文件或粘贴内容，系统会自动移除节点信息，只保留分组、规则与 DNS 等配置结构。
+              </p>
             )}
           </div>
 
@@ -142,18 +165,43 @@ export function TemplateUploadDialog({
           )}
 
           {mode === "yaml" && (
-            <FormField
-              label="配置内容（YAML）"
-              description="注意：系统会自动移除实际节点信息，只保留配置结构"
-              required
-            >
-              <Textarea
-                placeholder="粘贴您的 YAML 配置内容..."
-                value={yamlContent}
-                onChange={(event) => onYamlContentChange(event.target.value)}
-                className="min-h-[150px] font-mono text-xs"
-              />
-            </FormField>
+            <>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">YAML 文件</p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => yamlFileInputRef.current?.click()}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    选择 YAML 文件
+                  </Button>
+                  {yamlFileName && (
+                    <span className="text-xs text-fg-50 truncate">{yamlFileName}</span>
+                  )}
+                </div>
+                <Input
+                  ref={yamlFileInputRef}
+                  type="file"
+                  accept=".yaml,.yml,.txt"
+                  className="hidden"
+                  onChange={(event) => void handleYamlFileChange(event)}
+                />
+              </div>
+              <FormField
+                label="配置内容（YAML）"
+                description="注意：系统会自动移除实际节点信息，只保留配置结构"
+                required
+              >
+                <Textarea
+                  placeholder="粘贴您的 YAML 配置内容..."
+                  value={yamlContent}
+                  onChange={(event) => onYamlContentChange(event.target.value)}
+                  className="min-h-[150px] font-mono text-xs"
+                />
+              </FormField>
+            </>
           )}
 
           {showVisibilityControls && (
@@ -189,7 +237,7 @@ export function TemplateUploadDialog({
             ) : (
               <Upload className="h-4 w-4 mr-2" />
             )}
-            上传
+            {mode === "yaml" ? "上传模板" : "保存模板"}
           </Button>
         </DialogFooter>
       </DialogContent>

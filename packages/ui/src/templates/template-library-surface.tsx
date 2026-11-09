@@ -11,6 +11,7 @@ import { toast } from "@subboost/ui/components/ui/toaster";
 import { useUserStore } from "@subboost/ui/store/user-store";
 import { useConfigStore, type SubBoostTemplateConfig } from "@subboost/ui/store/config-store";
 import { builtinIdToType } from "@subboost/core/templates/builtin";
+import { convertClashYamlToTemplate } from "@subboost/core/templates/yaml-template";
 import { formatDateInBeijing } from "@subboost/core/time/beijing";
 import {
   ProductInteractionAdapterProvider,
@@ -125,7 +126,7 @@ function TemplateLibraryInner({ adapter }: Props) {
   const canUpload = Boolean(user && adapter.allowUpload !== false && adapter.uploadTemplate);
   const allowPublicTemplates = adapter.allowPublicTemplates !== false;
 
-  const openUploadDialog = React.useCallback((entry?: "templatesPage") => {
+  const openUploadDialog = React.useCallback((entry?: "templatesPage", mode: "config" | "yaml" = "config") => {
     if (!canUpload) return;
     if (entry) interactions?.templateUploadOpened?.({ entry });
     setUploadDialog(true);
@@ -133,7 +134,7 @@ function TemplateLibraryInner({ adapter }: Props) {
     setUploadDescription("");
     setUploadIsPublic(false);
     setUploadAsDefault(false);
-    setUploadMode("config");
+    setUploadMode(mode);
     setUploadYamlContent("");
   }, [canUpload, interactions]);
 
@@ -288,9 +289,52 @@ function TemplateLibraryInner({ adapter }: Props) {
 
   const handleUpload = async () => {
     if (!adapter.uploadTemplate || !uploadName.trim()) return;
+
+    let templateConfig: SubBoostTemplateConfig;
+    let yamlSummary: { groups: number; rules: number; ruleSets: number; ignoredNodes: number } | null = null;
+    let yamlWarnings: string[] = [];
     if (uploadMode === "yaml") {
-      toast({ title: "YAML 模板上传开发中", variant: "info" });
-      return;
+      try {
+        const converted = convertClashYamlToTemplate(uploadYamlContent, {
+          dnsYaml,
+          mixedPort,
+          allowLan,
+          testUrl,
+          testInterval,
+          ruleProviderBaseUrl,
+        });
+        templateConfig = converted.config;
+        yamlSummary = converted.summary;
+        yamlWarnings = converted.warnings;
+      } catch (error) {
+        toast({ title: error instanceof Error ? error.message : "YAML 解析失败", variant: "destructive" });
+        return;
+      }
+    } else {
+      templateConfig = {
+        schema: "subboost-template-config/v1",
+        template,
+        enabledProxyGroups,
+        hiddenProxyGroups,
+        customProxyGroups,
+        proxyGroupAdvanced,
+        proxyGroupAdvancedModeEnabled,
+        customRuleSets,
+        builtinRuleEdits,
+        customRules,
+        ruleOrder,
+        dialerProxyGroups,
+        proxyGroupNameOverrides,
+        dnsYaml,
+        mixedPort,
+        allowLan,
+        testUrl,
+        testInterval,
+        sharedHealthChecks,
+        ruleProviderBaseUrl,
+        cnIpNoResolve,
+        experimentalCnUseCnRuleSet,
+      } satisfies SubBoostTemplateConfig;
     }
 
     setIsUploading(true);
@@ -298,35 +342,27 @@ function TemplateLibraryInner({ adapter }: Props) {
       await adapter.uploadTemplate({
         name: uploadName,
         description: uploadDescription,
-        config: {
-          schema: "subboost-template-config/v1",
-          template,
-          enabledProxyGroups,
-          hiddenProxyGroups,
-          customProxyGroups,
-          proxyGroupAdvanced,
-          proxyGroupAdvancedModeEnabled,
-          customRuleSets,
-          builtinRuleEdits,
-          customRules,
-          ruleOrder,
-          dialerProxyGroups,
-          proxyGroupNameOverrides,
-          dnsYaml,
-          mixedPort,
-          allowLan,
-          testUrl,
-          testInterval,
-          sharedHealthChecks,
-          ruleProviderBaseUrl,
-          cnIpNoResolve,
-          experimentalCnUseCnRuleSet,
-        } satisfies SubBoostTemplateConfig,
+        config: templateConfig,
         isPublic: allowPublicTemplates ? (uploadAsDefault ? true : uploadIsPublic) : false,
         ...(uploadAsDefault ? { isOfficial: true } : {}),
       });
 
-      toast({ title: "模板上传成功！", variant: "success" });
+      if (yamlSummary) {
+        const ignored = yamlSummary.ignoredNodes > 0 ? `（已忽略 ${yamlSummary.ignoredNodes} 个节点）` : "";
+        toast({
+          title: `模板上传成功！已导入 ${yamlSummary.groups} 个分组、${yamlSummary.rules} 条规则、${yamlSummary.ruleSets} 个规则集${ignored}`,
+          variant: "success",
+        });
+        if (yamlWarnings.length > 0) {
+          toast({
+            title: `部分内容未导入（${yamlWarnings.length} 项）`,
+            description: yamlWarnings.slice(0, 3).join("；"),
+            variant: "warning",
+          });
+        }
+      } else {
+        toast({ title: "模板上传成功！", variant: "success" });
+      }
       setUploadDialog(false);
       if (uploadAsDefault) {
         setActiveTab("default");
@@ -355,7 +391,7 @@ function TemplateLibraryInner({ adapter }: Props) {
           <p className="text-fg-50">{enabledTabLabelText}</p>
         </div>
         {canUpload && (
-          <Button className="gap-2" onClick={() => openUploadDialog("templatesPage")}>
+          <Button className="gap-2" onClick={() => openUploadDialog("templatesPage", "yaml")}>
             <Upload className="h-4 w-4" />
             上传模板
           </Button>
@@ -398,7 +434,7 @@ function TemplateLibraryInner({ adapter }: Props) {
                 <Loader2 className="h-8 w-8 animate-spin text-primary-500" />
               </div>
             ) : filteredTemplates.length === 0 ? (
-              <EmptyTemplates tab={tab} canUpload={canUpload} onUpload={() => openUploadDialog("templatesPage")} />
+              <EmptyTemplates tab={tab} canUpload={canUpload} onUpload={() => openUploadDialog("templatesPage", "yaml")} />
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredTemplates.map((item) => (

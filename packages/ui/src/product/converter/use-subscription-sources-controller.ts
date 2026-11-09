@@ -73,6 +73,19 @@ export function useSubscriptionSourcesController({ mode }: Options) {
     [expandedSourceId, sources]
   );
   const [expandedSourceSnapshot, setExpandedSourceSnapshot] = React.useState<ExpandedSourceSnapshot | null>(null);
+  // YAML 配置与节点链接的输入框默认折叠（订阅链接保持展开）；新增的导入源默认展开
+  const [collapsedSourceIds, setCollapsedSourceIds] = React.useState<ReadonlySet<string>>(
+    new Set(sources.filter((source) => source.type !== "url").map((source) => source.id)),
+  );
+
+  const toggleSourceCollapsed = React.useCallback((id: string) => {
+    setCollapsedSourceIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
 
   React.useEffect(() => {
     if (!expandedSource) {
@@ -227,6 +240,16 @@ export function useSubscriptionSourcesController({ mode }: Options) {
         return;
       }
 
+      // 切回订阅链接时自动展开输入框
+      if (type === "url") {
+        setCollapsedSourceIds((prev) => {
+          if (!prev.has(id)) return prev;
+          const next = new Set(prev);
+          next.delete(id);
+          return next;
+        });
+      }
+
       setSources(
         sources.map((source) => {
           if (source.id !== id) return source;
@@ -277,6 +300,7 @@ export function useSubscriptionSourcesController({ mode }: Options) {
   return {
     addSource,
     closeExpandedSourceEditor,
+    collapsedSourceIds,
     error,
     expandedSource,
     expandedSourcePreviewName,
@@ -290,6 +314,7 @@ export function useSubscriptionSourcesController({ mode }: Options) {
     setShowAddMenu,
     showAddMenu,
     sources,
+    toggleSourceCollapsed,
     updateSource,
     updateSourceMeta,
     updateSourceType,

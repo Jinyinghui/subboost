@@ -83,6 +83,7 @@ vi.mock("lucide-react", () => ({
   AlertCircle: () => null,
   Check: () => null,
   ChevronDown: () => null,
+  ChevronRight: () => null,
   ChevronUp: () => null,
   CircleHelp: () => null,
   FileCode: () => null,
@@ -289,6 +290,74 @@ describe("quick mode SourcesSection", () => {
     expect(mocks.captures.editor).toEqual(expect.objectContaining({ source: urlSource }));
     expect(mocks.captures.addSourceMenus[0]).toEqual(expect.objectContaining({ open: true }));
     expect(mocks.captures.sourceTypeChoices).toHaveLength(2);
+  });
+
+  it("collapses non-url sources by default and expands them on toggle", () => {
+    const { html, setters } = renderSection();
+
+    expect(mocks.captures.inputs.some((props: any) => props.value === "https://example.com/sub")).toBe(true);
+    expect(mocks.captures.textareas).toHaveLength(0);
+    expect(html).toContain("已填写 1 行，点击展开查看");
+    const expandButton = mocks.captures.iconButtons.find((props: any) => props.label === "展开");
+    expect(expandButton).toBeDefined();
+    expandButton.onClick();
+    expect(setters[3].lastValue instanceof Set).toBe(true);
+    expect((setters[3].lastValue as Set<string>).has("s2")).toBe(false);
+  });
+
+  it("renders expanded non-url sources with a textarea and collapse toggle", () => {
+    const { setters } = renderSection({ 3: new Set() });
+
+    expect(mocks.captures.textareas.some((props: any) => props.value === "ss://node")).toBe(true);
+    expect(mocks.captures.iconButtons.some((props: any) => props.label === "折叠")).toBe(true);
+    const textArea = mocks.captures.textareas.find((props: any) => props.value === "ss://node");
+    expect(textArea.className).toContain("min-h-[140px]");
+    textArea.onChange({ target: { value: "trojan://node" } });
+    expect(mocks.markSourceAsPendingImport).toHaveBeenCalledWith(expect.objectContaining({ content: "trojan://node" }));
+
+    mocks.captures.iconButtons.find((props: any) => props.label === "折叠").onClick();
+    expect(setters[3].lastValue instanceof Set).toBe(true);
+    expect((setters[3].lastValue as Set<string>).has("s2")).toBe(true);
+  });
+
+  it("uses a compact textarea for a single expanded source", () => {
+    mocks.store.sources = [textSource];
+    renderSection({ 3: new Set() });
+
+    const textArea = mocks.captures.textareas.find((props: any) => props.value === "ss://node");
+    expect(textArea.className).toContain("flex-1 min-h-[100px]");
+  });
+
+  it("shows an empty hint for a collapsed source without content", () => {
+    mocks.store.sources = [{ ...textSource, content: "" }];
+    const { html } = renderSection();
+
+    expect(html).toContain("未填写，点击展开");
+    expect(mocks.captures.textareas).toHaveLength(0);
+  });
+
+  it("moves and opens the editor for sources from header buttons", () => {
+    const { setters } = renderSection();
+
+    mocks.captures.iconButtons.find((props: any) => props.label === "上移" && !props.disabled).onClick();
+    expect(mocks.store.setSources).toHaveBeenCalledWith(expect.any(Array));
+    mocks.captures.iconButtons.filter((props: any) => props.label === "高级编辑")[1].onClick();
+    expect(setters[1].lastValue).toBe("s2");
+  });
+
+  it("hides the delete button for the last remaining source", () => {
+    mocks.store.sources = [urlSource];
+    renderSection();
+
+    expect(mocks.captures.iconButtons.some((props: any) => props.label === "删除导入源")).toBe(false);
+    expect(mocks.store.setSources).not.toHaveBeenCalled();
+  });
+
+  it("keeps an expanded source expanded when switching back to a url", () => {
+    const { setters } = renderSection({ 3: new Set() });
+
+    mocks.captures.sourceTypeChoices.find((props: any) => props.value === "text").onChange("url");
+    expect((setters[3].lastValue as Set<string>).size).toBe(0);
   });
 
   it("updates source content and metadata through the shared editor contract", () => {

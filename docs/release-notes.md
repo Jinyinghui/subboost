@@ -1,3 +1,17 @@
+# SubBoost v2.11.4
+
+## 中文
+
+- 模板库支持真正的 YAML 上传：选择本地 Clash YAML 文件即可导入为站内模板，自动生成除节点以外的分组、规则、规则集与 DNS 配置（节点只计个数、不导入；与内置分组同名的分组会改写该内置分组的高级配置）。上传失败或部分内容跳过时会有提示。
+- 首页“上传模板”改名为“保存模板”（仍是把当前配置保存为模板）。
+- 首页输入源默认只展开订阅链接，YAML 配置与节点链接两个框默认折叠（显示已填行数，点击展开）。
+
+## English
+
+- The template library now supports real YAML uploads: pick a local Clash YAML file and it is imported as a site template, generating groups, rules, rule sets, and DNS config except nodes (nodes are only counted, not imported; a group sharing a builtin group's name overrides that builtin group's advanced config). Failures and skipped items are reported.
+- The home page "上传模板" button is renamed "保存模板" (still saves the current config as a template).
+- Home input sources now start collapsed except the subscription URL: the YAML config and node links boxes show a filled-line count and expand on click.
+
 # SubBoost v2.11.3
 
 ## 中文

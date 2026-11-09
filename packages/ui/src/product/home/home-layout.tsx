@@ -234,7 +234,7 @@ export function HomeLayout({
                   >
                     <Link href={templateUploadHref}>
                       <Upload className="h-4 w-4" />
-                      上传模板
+                      保存模板
                     </Link>
                   </Button>
                 )}

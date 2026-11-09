@@ -1,4 +1,4 @@
-import { X, AlertCircle, Check, Loader2, Maximize2, ChevronUp, ChevronDown } from "lucide-react";
+import { X, AlertCircle, Check, Loader2, Maximize2, ChevronUp, ChevronDown, ChevronRight } from "lucide-react";
 import { Button } from "@subboost/ui/components/ui/button";
 import { IconButton } from "@subboost/ui/components/ui/icon-button";
 import { Textarea } from "@subboost/ui/components/ui/textarea";
@@ -16,6 +16,7 @@ export function SourcesSection() {
   const {
     addSource,
     closeExpandedSourceEditor,
+    collapsedSourceIds,
     error,
     expandedSource,
     expandedSourcePreviewName,
@@ -28,6 +29,7 @@ export function SourcesSection() {
     setShowAddMenu,
     showAddMenu,
     sources,
+    toggleSourceCollapsed,
     updateSource,
     updateSourceMeta,
     updateSourceType,
@@ -46,11 +48,27 @@ export function SourcesSection() {
             total: sources.length,
           });
           const sourceNodes = nodesBySourceId.get(source.id) ?? [];
+          const isCollapsed = source.type !== "url" && collapsedSourceIds.has(source.id);
+          const contentLineCount = source.content.trim() ? source.content.split("\n").length : 0;
           return (
             <div key={source.id} className="flex flex-col gap-1.5 flex-shrink-0">
               {/* Source Header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
+                  {source.type !== "url" && (
+                    <IconButton
+                      label={isCollapsed ? "展开" : "折叠"}
+                      variant="ghost"
+                      onClick={() => toggleSourceCollapsed(source.id)}
+                      className="h-6 w-6 rounded p-1 text-fg-30 hover:bg-ink/5 hover:text-fg-50"
+                    >
+                      {isCollapsed ? (
+                        <ChevronRight className="h-3.5 w-3.5" aria-hidden="true" />
+                      ) : (
+                        <ChevronDown className="h-3.5 w-3.5" aria-hidden="true" />
+                      )}
+                    </IconButton>
+                  )}
                   <SourceTypeChoices value={source.type} onChange={(type) => updateSourceType(source.id, type)} />
                   <span className="text-xs text-fg-50">
                     {sourceDisplayLabel}
@@ -126,7 +144,11 @@ export function SourcesSection() {
               </div>
 
               {/* Source Input */}
-              {source.type === "url" ? (
+              {isCollapsed ? (
+                <p className="text-xs text-fg-30">
+                  {contentLineCount > 0 ? `已填写 ${contentLineCount} 行，点击展开查看` : "未填写，点击展开"}
+                </p>
+              ) : source.type === "url" ? (
                 <Input
                   value={source.content}
                   onChange={(e) => updateSource(source.id, e.target.value)}
