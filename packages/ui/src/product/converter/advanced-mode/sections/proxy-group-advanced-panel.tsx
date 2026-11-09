@@ -12,7 +12,7 @@ import { toast } from "@subboost/ui/components/ui/toaster";
 import { cn } from "@subboost/ui/lib/utils";
 import { PROXY_GROUP_MODULES, generateProxyGroups } from "@subboost/core/generator/proxy-groups";
 import { resolveProxyGroupModuleName } from "@subboost/core/proxy-group-name";
-import { REGION_PRESETS } from "@subboost/core/proxy-group-advanced";
+import { REGION_PRESETS, resolveProviderFilterFields } from "@subboost/core/proxy-group-advanced";
 import { getProxyGroupMemberKey } from "@subboost/core/proxy-group-targets";
 import { resolveNodeNameFilter } from "@subboost/core/subscription/node-name-filter";
 import { getNodeSourceIds } from "@subboost/core/subscription/node-source-state";
@@ -345,6 +345,29 @@ export function ProxyGroupAdvancedPanel({
 
   const sourceIds = normalizeList(advanced.sourceIds);
   const regions = normalizeList(advanced.regions);
+  const effectiveGroupType = React.useMemo(() => {
+    if (target.kind === "custom") {
+      const group = customProxyGroups.find((item) => item.id === target.id);
+      return advanced.groupType ?? group?.groupType ?? "select";
+    }
+    const proxyModule = PROXY_GROUP_MODULES.find((item) => item.id === target.id);
+    return advanced.groupType ?? proxyModule?.groupType ?? "select";
+  }, [advanced.groupType, customProxyGroups, target.id, target.kind]);
+  const hasProviders = React.useMemo(
+    () => sources.some((source) => source.type === "url" && source.useProxyProviders !== false),
+    [sources],
+  );
+  const providerFilterFields = React.useMemo(
+    () => resolveProviderFilterFields(advanced, hasProviders),
+    [advanced, hasProviders],
+  );
+  const showProviderFilter =
+    (effectiveGroupType === "url-test" ||
+      effectiveGroupType === "fallback" ||
+      effectiveGroupType === "load-balance") &&
+    Boolean(providerFilterFields.filter);
+  const useProvidersChoice =
+    advanced.useProviders === true ? "always" : advanced.useProviders === false ? "never" : "auto";
   const extraRefs = normalizeList(advanced.extraMembers);
   const excludedRefs = normalizeList(advanced.excludedMembers);
   const memberOrderRefs = normalizeList(advanced.memberOrder);
@@ -525,6 +548,91 @@ export function ProxyGroupAdvancedPanel({
               className="h-8 border-ink/10 bg-ink/5 text-xs"
             />
           </FormField>
+        </div>
+      </div>
+
+      <div className="mx-3 h-px bg-ink/10" />
+
+      <div className="grid gap-3 p-3 md:grid-cols-[1fr_1fr_1fr]">
+        <div>
+          <div className={ADVANCED_PANEL_TITLE_CLASS}>订阅 provider（use:）</div>
+          <ChoiceGroup label="订阅 provider" className="gap-1.5">
+            <ChoiceChip
+              label="默认"
+              selected={useProvidersChoice === "auto"}
+              onClick={() => onChange({ useProviders: undefined })}
+              className="min-h-0 rounded px-2 py-1 text-[10px]"
+            />
+            <ChoiceChip
+              label="始终挂 use:"
+              selected={useProvidersChoice === "always"}
+              onClick={() => onChange({ useProviders: true })}
+              className="min-h-0 rounded px-2 py-1 text-[10px]"
+            />
+            <ChoiceChip
+              label="从不挂 use:"
+              selected={useProvidersChoice === "never"}
+              onClick={() => onChange({ useProviders: false })}
+              className="min-h-0 rounded px-2 py-1 text-[10px]"
+            />
+          </ChoiceGroup>
+          <div className="mt-1 text-[10px] text-fg-35">默认只给消费节点的组（测速/兜底/按节点筛选）挂 use:</div>
+        </div>
+        {effectiveGroupType === "url-test" ? (
+          <div>
+            <FormField
+              label={<span className="text-[11px] font-medium text-fg-50">容差 tolerance（毫秒）</span>}
+            >
+              <Input
+                type="number"
+                min={0}
+                value={advanced.tolerance ?? ""}
+                onChange={(event) => {
+                  const raw = event.target.value.trim();
+                  if (!raw) {
+                    onChange({ tolerance: undefined });
+                    return;
+                  }
+                  const parsed = Number.parseInt(raw, 10);
+                  onChange({ tolerance: Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined });
+                }}
+                placeholder="50（默认）"
+                className="h-8 border-ink/10 bg-ink/5 text-xs"
+              />
+            </FormField>
+          </div>
+        ) : (
+          <div />
+        )}
+        <div>
+          {target.kind === "custom" ? (
+            <>
+              <div className={ADVANCED_PANEL_TITLE_CLASS}>仅订阅节点</div>
+              <label className="flex min-w-0 items-center gap-2 text-[11px] text-fg-65">
+                <input
+                  type="checkbox"
+                  checked={advanced.providerOnly === true}
+                  onChange={(event) => onChange({ providerOnly: event.target.checked })}
+                  className="h-3 w-3 accent-indigo-500"
+                />
+                <span>仅从订阅取节点（不列出节点名）</span>
+              </label>
+              <div className="mt-1 text-[10px] text-fg-35">用于“手动切换”类分组：只输出 use:，不输出 proxies:</div>
+            </>
+          ) : null}
+          {showProviderFilter ? (
+            <div className="mt-2 text-[10px] text-fg-35">
+              订阅模式下输出 filter：
+              <span className="break-all font-mono text-fg-65">{providerFilterFields.filter}</span>
+              {providerFilterFields["exclude-filter"] ? (
+                <>
+                  <br />
+                  exclude-filter：
+                  <span className="break-all font-mono text-fg-65">{providerFilterFields["exclude-filter"]}</span>
+                </>
+              ) : null}
+            </div>
+          ) : null}
         </div>
       </div>
 

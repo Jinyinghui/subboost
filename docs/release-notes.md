@@ -1,3 +1,19 @@
+# SubBoost v2.11.5
+
+## 中文
+
+- 订阅链接默认走 proxy-providers 模式：不再在站内拉取/解析节点，生成的配置里写 `proxy-providers` 供客户端拉取；provider 按顺序命名为 `my_sub`、`my_sub_2`……，路径为 `./proxies/my_sub.yaml`。已配好的订阅链接（未显式关闭该模式）也会自动切过去；想看节点列表时可把单个源切回内联模式。
+- 国家组按本地配置格式输出：地区组（url-test）在 provider 模式下输出 `use:` + `filter:`（如香港 `(?i)港|hk|hongkong|hong kong`），不再列出节点名；德国、加拿大、荷兰等地区同样按表达式自动分组（新增荷兰预设）。url-test 组默认容差 50（美国组可单独配 150），不再输出 `lazy: false`，仅用 `use:` 取节点的组不再输出空的 `proxies: []`。
+- `use:` 默认只挂在消费节点的组上（测速/兜底/负载均衡、仅订阅取节点的组）；节点选择、服务组等默认不再挂 `use:`。每组的高级设置里可以单独改：默认/始终挂/从不挂，以及“仅从订阅取节点”（用于“手动切换”类分组）。
+- 上传本地 Clash YAML 为模板时，`use:`/`filter`/`tolerance` 会保留到模板里（`my_sub` 引用不再警告），保存模板后再使用也能读回。
+
+## English
+
+- Subscription links now default to proxy-providers mode: nodes are no longer fetched/parsed in SubBoost; the generated config writes `proxy-providers` for the client to fetch. Providers are named sequentially `my_sub`, `my_sub_2`, …, with paths `./proxies/my_sub.yaml`. Existing subscription links (that did not explicitly opt out) migrate automatically; switch a single source back to inline mode to see its node list again.
+- Country groups now follow the local config format: region groups (url-test) in provider mode emit `use:` + `filter:` (e.g. Hong Kong `(?i)港|hk|hongkong|hong kong`) instead of listing node names; Germany, Canada, the Netherlands and other regions group by expression the same way (Netherlands preset added). url-test groups default to tolerance 50 (US can be set to 150 separately), no longer emit `lazy: false`, and groups that only use `use:` no longer emit an empty `proxies: []`.
+- `use:` is attached by default only to node-consuming groups (url-test/fallback/load-balance and provider-only groups); the select group, service groups and others no longer get it by default. Each group's advanced settings can override this (default/always/never), plus a "provider nodes only" switch for manual-switch style groups.
+- Uploading a local Clash YAML as a template now preserves `use:`/`filter`/`tolerance` in the template (`my_sub` references no longer warn), so saved templates round-trip the country groups.
+
 # SubBoost v2.11.4
 
 ## 中文

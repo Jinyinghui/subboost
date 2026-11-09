@@ -374,7 +374,7 @@ describe("advanced mode InputSection", () => {
     mocks.store.sources = [];
     renderSection();
     expect(mocks.store.setSources).toHaveBeenCalledWith([
-      { id: "1", type: "url", content: "", nameTemplate: "[{tag}] {name}" },
+      { id: "1", type: "url", content: "", nameTemplate: "[{tag}] {name}", useProxyProviders: true },
     ]);
     expect(stateMock.setters[2]).toHaveBeenCalledWith(null);
 

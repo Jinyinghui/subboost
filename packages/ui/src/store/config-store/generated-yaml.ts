@@ -1,4 +1,5 @@
 import { generateClashYaml } from "@subboost/core/generator";
+import { resolveProxyProviderName, resolveProxyProviderPath } from "@subboost/core/subscription/proxy-providers";
 import { stripImportedNodeControlFieldsFromList } from "@subboost/core/subscription/imported-node-controls";
 import { resolveNodeNameFilter } from "@subboost/core/subscription/node-name-filter";
 import type { ParsedNode } from "@subboost/core/types/node";
@@ -8,9 +9,10 @@ function buildProxyProvidersFromSources(
   state: ConfigState
 ): Record<string, unknown> | undefined {
   const out: Record<string, unknown> = {};
+  let providerIndex = 0;
 
   for (const source of state.sources) {
-    if (!source || source.type !== "url" || !source.useProxyProviders) continue;
+    if (!source || source.type !== "url" || source.useProxyProviders === false) continue;
     const url = typeof source.content === "string" ? source.content.trim() : "";
     if (!url) continue;
 
@@ -22,12 +24,12 @@ function buildProxyProvidersFromSources(
     }
     if (!["http:", "https:"].includes(parsed.protocol)) continue;
 
-    const name = `url_${source.id}`;
+    const name = resolveProxyProviderName(providerIndex++);
     out[name] = {
       type: "http",
       url,
       interval: 3600,
-      path: `./proxy_providers/${name}.yaml`,
+      path: resolveProxyProviderPath(name),
       "health-check": {
         enable: true,
         url: state.testUrl,

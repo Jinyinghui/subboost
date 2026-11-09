@@ -73,6 +73,23 @@ describe("createSourceActions", () => {
     });
   });
 
+  it("defaults URL sources to proxy-providers mode while preserving an explicit opt-out", () => {
+    const { actions, getState } = createHarness({ sources: [] });
+
+    actions.setSources([
+      source({ id: "s1", type: "url", content: "https://one.example/sub" }),
+      source({ id: "s2", type: "url", content: "https://two.example/sub", useProxyProviders: false }),
+      source({ id: "s3", type: "yaml", content: "proxies: []" }),
+    ]);
+
+    expect(getState().sources).toEqual([
+      expect.objectContaining({ id: "s1", useProxyProviders: true }),
+      expect.objectContaining({ id: "s2", useProxyProviders: false }),
+      expect.objectContaining({ id: "s3" }),
+    ]);
+    expect(getState().sources[2]).not.toHaveProperty("useProxyProviders");
+  });
+
   it("updates source lists directly when no source ids are removed", () => {
     const existing = source({ id: "s1", type: "yaml", content: "old" });
     const next = source({ id: "s1", type: "yaml", content: "new" });

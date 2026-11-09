@@ -363,7 +363,7 @@ export const initialState: ConfigState = {
     excludeRegexes: [...DEFAULT_NODE_NAME_FILTER_CONFIG.excludeRegexes],
   },
   sources: [
-    { id: "1", type: "url", content: "" },
+    { id: "1", type: "url", content: "", useProxyProviders: true },
     { id: "2", type: "yaml", content: "" },
     { id: "3", type: "nodes", content: "" },
   ],

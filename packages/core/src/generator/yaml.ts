@@ -364,7 +364,10 @@ export function configToYaml(config: ClashConfig): string {
   if (config["proxy-groups"]) {
     for (const group of config["proxy-groups"]) {
       const record = group as unknown as Record<string, unknown>;
-      const keys = getOrderedMappingKeys(record, PROXY_GROUP_FIELD_ORDER);
+      // lazy 默认 false，不输出（与本地配置格式一致；lazy: true 仍输出）
+      const keys = getOrderedMappingKeys(record, PROXY_GROUP_FIELD_ORDER).filter(
+        (key) => !(key === "lazy" && record[key] === false)
+      );
       if (keys.length === 0) continue;
       keys.forEach((key, index) => {
         const prefix = index === 0 ? "  - " : "    ";

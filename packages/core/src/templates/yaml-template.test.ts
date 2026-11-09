@@ -123,6 +123,56 @@ describe("convertClashYamlToTemplate", () => {
     expect(lb?.strategy).toBe("round-robin");
   });
 
+  it("preserves provider-backed groups (use/filter/tolerance) from a local-format YAML", () => {
+    const yaml = `
+proxy-groups:
+  - name: "🇭🇰 香港节点"
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 50
+    use:
+      - my_sub
+    filter: (?i)港|hk|hongkong|hong kong
+  - name: "🇺🇲 美国节点"
+    type: url-test
+    url: https://www.gstatic.com/generate_204
+    interval: 300
+    tolerance: 150
+    use:
+      - my_sub
+    filter: (?i)美|us|america|united states
+  - name: "🚀 手动切换"
+    type: select
+    use:
+      - my_sub
+  - name: "🚀 节点选择"
+    type: select
+    proxies: ["🇭🇰 香港节点", "🇺🇲 美国节点", "🚀 手动切换", "DIRECT"]
+rules:
+  - MATCH,DIRECT
+`;
+    const result = convertClashYamlToTemplate(yaml, FALLBACKS);
+
+    const hk = result.config.customProxyGroups.find((group) => group.name === "🇭🇰 香港节点");
+    expect(hk?.groupType).toBe("url-test");
+    expect(hk?.advanced?.includeRegex).toBe("(?i)港|hk|hongkong|hong kong");
+    expect(hk?.advanced?.tolerance).toBe(50);
+    expect(hk?.advanced?.useProviders).toBe(true);
+
+    const us = result.config.customProxyGroups.find((group) => group.name === "🇺🇲 美国节点");
+    expect(us?.advanced?.tolerance).toBe(150);
+    expect(us?.advanced?.useProviders).toBe(true);
+
+    const manual = result.config.customProxyGroups.find((group) => group.name === "🚀 手动切换");
+    expect(manual?.groupType).toBe("select");
+    expect(manual?.advanced?.useProviders).toBe(true);
+    expect(manual?.advanced?.providerOnly).toBe(true);
+
+    // 本站 provider 引用不再警告（语义已保留）
+    expect(result.warnings.some((warning) => warning.includes("proxy-providers"))).toBe(false);
+  });
+
   it("keeps YAML rule order across custom rules and rule sets", () => {
     const result = convertClashYamlToTemplate(SAMPLE_YAML, FALLBACKS);
 

@@ -85,11 +85,11 @@ describe("computeGeneratedYamlResult", () => {
       expect.objectContaining({
         nodes,
         proxyProviders: {
-          "url_source-1": {
+          "my_sub": {
             type: "http",
             url: "https://example.com/sub.yaml",
             interval: 3600,
-            path: "./proxy_providers/url_source-1.yaml",
+            path: "./proxies/my_sub.yaml",
             "health-check": {
               enable: true,
               url: "https://cp.cloudflare.com/generate_204",
@@ -166,6 +166,26 @@ describe("computeGeneratedYamlResult", () => {
     expect(mocks.generateClashYaml).toHaveBeenCalled();
   });
 
+  it("skips provider sources without string content", () => {
+    const result = computeGeneratedYamlResult(
+      createState({
+        sources: [
+          {
+            id: "bad",
+            type: "url",
+            content: undefined as unknown as string,
+            useProxyProviders: true,
+          },
+        ],
+      })
+    );
+
+    expect(result).toEqual({ yaml: "", error: null });
+    expect(mocks.generateClashYaml).toHaveBeenCalledWith(
+      expect.objectContaining({ proxyProviders: undefined })
+    );
+  });
+
   it("keeps provider-only preview content visible", () => {
     const yaml = computeGeneratedYaml(
       createState({
@@ -213,7 +233,7 @@ describe("computeGeneratedYamlResult", () => {
     expect(mocks.generateClashYaml).toHaveBeenCalledWith(
       expect.objectContaining({
         nodes: [],
-        proxyProviders: expect.objectContaining({ url_remote: expect.any(Object) }),
+        proxyProviders: expect.objectContaining({ my_sub: expect.any(Object) }),
       })
     );
   });

@@ -210,11 +210,11 @@ describe("subscription URL and config helpers", () => {
       },
       proxyGroupNameOverrides: { auto: "Auto" },
       proxyProviders: {
-        url_main_source: {
+        my_sub: {
           type: "http",
           url: "https://sub.example.com/list?token=abc",
           interval: 3600,
-          path: "./proxy_providers/url_main_source.yaml",
+          path: "./proxies/my_sub.yaml",
           "health-check": {
             enable: true,
             url: "https://probe.example.com/204",

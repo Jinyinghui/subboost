@@ -92,8 +92,9 @@ describe("proxy group generator", () => {
     expect(rejectProxies).not.toContain("Node B");
     expect(groups.find((group) => group.name.includes("节点选择"))).toMatchObject({
       type: "select",
-      use: ["remote"],
     });
+    // 节点选择本身不消费节点：默认不挂 use:（本地配置亦然）
+    expect(groups.find((group) => group.name.includes("节点选择"))).not.toHaveProperty("use");
   });
 
   it("generates providers and template metadata helpers", () => {
@@ -241,7 +242,7 @@ describe("proxy group generator", () => {
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("Filtered Group");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("🚀 节点选择");
     expect(groups.find((group) => group.name === "Custom normal")?.proxies).not.toContain("Custom normal");
-    expect(groups.find((group) => group.name === "Custom normal")).toMatchObject({ use: ["remote"] });
+    expect(groups.find((group) => group.name === "Custom normal")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).not.toContain("Filtered Group");
     expect(groups.find((group) => group.name === "🚀 节点选择")?.proxies).not.toContain("Custom normal");
     expect(groups.find((group) => group.name === "🏠 私有网络")?.proxies?.slice(0, 5)).toEqual([
@@ -299,20 +300,22 @@ describe("proxy group generator", () => {
     expect(groups.find((group) => group.name === "Filtered URL")).toMatchObject({
       type: "url-test",
       proxies: ["Node A"],
+      use: ["remote"],
+      filter: "Node A",
     });
-    expect(groups.find((group) => group.name === "Filtered URL")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "Filtered Fallback")).toMatchObject({
       type: "fallback",
       proxies: ["Node A", "Node B"],
+      use: ["remote"],
     });
-    expect(groups.find((group) => group.name === "Filtered Fallback")).not.toHaveProperty("use");
     expect(groups.find((group) => group.name === "Filtered Balance")).toMatchObject({
       type: "load-balance",
       strategy: "consistent-hashing",
       proxies: ["Node A", "Node B"],
+      use: ["remote"],
     });
-    expect(groups.find((group) => group.name === "Filtered Balance")).not.toHaveProperty("use");
-    expect(groups.at(-1)).toMatchObject({ name: "Custom inline", use: ["remote"] });
+    expect(groups.at(-1)).toMatchObject({ name: "Custom inline" });
+    expect(groups.at(-1)).not.toHaveProperty("use");
   });
 
   it("omits disabled custom groups from groups, providers, names, and custom rules", () => {
@@ -443,9 +446,12 @@ describe("proxy group generator", () => {
     });
     expect(groups.find((group) => group.name.includes("AI"))).toMatchObject({
       type: "url-test",
-      proxies: [],
       use: ["remote"],
     });
+    // 仅用 use: 取节点时不输出空的 proxies: []
+    expect(groups.find((group) => group.name.includes("AI"))).not.toHaveProperty("proxies");
+    // regions 只有 other 时派生不出 filter
+    expect(groups.find((group) => group.name.includes("AI"))).not.toHaveProperty("filter");
     expect(groups.find((group) => group.name === "🏠 私有网络")?.proxies?.slice(0, 2)).toEqual(["DIRECT", "REJECT"]);
     expect(groups.find((group) => group.name === "🔒 国内服务")?.proxies?.slice(0, 2)).toEqual(["REJECT", "DIRECT"]);
     expect(providers["skip-by-name"]).toBeUndefined();

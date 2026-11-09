@@ -15,7 +15,7 @@ import type {
   ProxyGroupGroupType,
   RuleProvider,
 } from "@subboost/core/types/config";
-import { resolveProxyGroupMembers } from "@subboost/core/proxy-group-advanced";
+import { normalizeProxyGroupAdvancedConfig, resolveProviderFilterFields, resolveProxyGroupMembers } from "@subboost/core/proxy-group-advanced";
 import { isSubscriptionInfoNodeName } from "@subboost/core/subscription/info-node-name";
 import { isDisabledCustomProxyGroupTarget } from "@subboost/core/proxy-group-targets";
 
@@ -36,8 +36,9 @@ export type { ProxyGroupModule, ProxyGroupRule };
 export { generateRules };
 
 /**
- * 分类信息
+ * url-test 组默认容差（毫秒；与 Clash 默认一致，本地配置亦为 50，美国组可单独配 150）
  */
+export const DEFAULT_URL_TEST_TOLERANCE = 50;
 export const CATEGORY_INFO: Record<string, { name: string; order: number }> = {
   core: { name: "核心组", order: 0 },
   service: { name: "常用服务", order: 1 },
@@ -131,7 +132,39 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
     proxyGroupNameOverrides,
   } = options;
   const activeCustomProxyGroups = getEnabledCustomProxyGroups(customProxyGroups);
-  const providerUse = proxyProviderNames.length > 0 ? { use: proxyProviderNames } : {};
+  const hasProviders = proxyProviderNames.length > 0;
+  const providerUse = hasProviders ? { use: proxyProviderNames } : {};
+  /**
+   * 该组是否挂 use:（订阅 provider）。
+   * - 每组高级配置可单独指定（useProviders：true 始终挂、false 从不挂）
+   * - 默认只给消费节点的组挂：url-test/fallback/load-balance、仅 provider 取节点的组；
+   *   其余组（服务组、节点选择、按节点筛选的 select 组等）默认不挂——
+   *   select 组挂 use: 会把 provider 的全部节点都加进来，违背“只取筛选出的节点”的本意
+   */
+  const resolveUseForGroup = (
+    groupType: ProxyGroupGroupType,
+    advanced: ProxyGroupAdvancedConfig | undefined
+  ): Record<string, unknown> => {
+    const normalized = normalizeProxyGroupAdvancedConfig(advanced);
+    if (normalized.useProviders === false) return {};
+    if (normalized.useProviders === true) return providerUse;
+    if (normalized.providerOnly) return providerUse;
+    if (groupType === "url-test" || groupType === "fallback" || groupType === "load-balance") return providerUse;
+    return {};
+  };
+  /**
+   * 该组挂到 provider 上时的附加字段：use: +（测速/兜底组）filter/exclude-filter。
+   * filter 只在组实际挂了 use: 时输出（无 use: 时 filter 对客户端无意义）。
+   */
+  const resolveExtraForGroup = (
+    groupType: ProxyGroupGroupType,
+    advanced: ProxyGroupAdvancedConfig | undefined
+  ): Record<string, unknown> => {
+    const use = resolveUseForGroup(groupType, advanced);
+    if (!("use" in use)) return use;
+    if (groupType !== "url-test" && groupType !== "fallback" && groupType !== "load-balance") return use;
+    return { ...use, ...resolveProviderFilterFields(advanced, hasProviders) };
+  };
   const nodeNames = nodes.map((n) => n.name);
   // 业务组/测速组需要过滤掉“信息节点”，仅在 🚀 节点选择 中保留显示
   const filteredNodeNames = nodeNames.filter((n) => !isSubscriptionInfoNodeName(n));
@@ -216,8 +249,9 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
     groupType: ProxyGroupGroupType,
     proxies: string[],
     strategy?: LoadBalanceStrategy,
-    extraFields: Record<string, unknown> = providerUse,
+    extraFields: Record<string, unknown> = {},
     groupTestUrl?: string,
+    tolerance?: number,
   ): ProxyGroup =>
     buildTypedProxyGroup({
       name,
@@ -228,6 +262,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
       strategy,
       extraFields,
       urlTestLazy: false,
+      tolerance: groupType === "url-test" ? tolerance ?? DEFAULT_URL_TEST_TOLERANCE : undefined,
     });
 
   // 辅助函数：生成单个代理组
@@ -253,7 +288,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
               id: module.id,
               name: moduleName,
             }),
-            ...providerUse,
+            ...resolveExtraForGroup(groupType, advanced),
           });
         } else {
           const defaultProxies = moduleBaseProxies.filter((target) => target !== moduleName);
@@ -265,7 +300,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
               id: module.id,
               name: moduleName,
             }),
-            ...providerUse,
+            ...resolveExtraForGroup(groupType, advanced),
           });
         }
         break;
@@ -279,7 +314,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
               id: module.id,
               name: moduleName,
             }),
-            undefined, providerUse, advanced?.testUrl,
+            undefined, resolveExtraForGroup(groupType, advanced), advanced?.testUrl, advanced?.tolerance,
           ));
         break;
 
@@ -292,6 +327,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
             id: module.id,
             name: moduleName,
           }),
+          undefined, resolveExtraForGroup(groupType, advanced),
         ));
         break;
 
@@ -305,6 +341,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
             name: moduleName,
           }),
           advanced?.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
+          resolveExtraForGroup(groupType, advanced),
         ));
         break;
 
@@ -319,7 +356,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
               id: module.id,
               name: moduleName,
             }),
-            ...providerUse,
+            ...resolveExtraForGroup(groupType, advanced),
           });
         }
         break;
@@ -343,7 +380,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
               id: module.id,
               name: moduleName,
             }),
-            ...providerUse,
+            ...resolveExtraForGroup(groupType, advanced),
           });
         }
         break;
@@ -351,16 +388,22 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
   };
 
   const createCustomProxyGroup = (customGroup: CustomProxyGroup): ProxyGroup => {
+    // 仅从订阅 provider 取节点：不列出任何显式成员（用于“手动切换”类 select 组）
+    const providerOnly = normalizeProxyGroupAdvancedConfig(customGroup.advanced).providerOnly === true;
     const resolveCustom = (defaultProxyNames: string[]) =>
-      resolveGroupProxyNames(defaultProxyNames, customGroup.advanced, {
-        kind: "custom",
-        id: customGroup.id,
-        name: customGroup.name,
-      });
+      providerOnly
+        ? []
+        : resolveGroupProxyNames(defaultProxyNames, customGroup.advanced, {
+            kind: "custom",
+            id: customGroup.id,
+            name: customGroup.name,
+          });
+    const extra = resolveExtraForGroup(customGroup.groupType, customGroup.advanced);
+    const tolerance = customGroup.advanced?.tolerance;
 
     if (usesFilteredNodeMembers(customGroup)) {
       if (customGroup.groupType === "url-test" || customGroup.groupType === "fallback") {
-        return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames), undefined, {}, customGroup.advanced?.testUrl);
+        return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames), undefined, extra, customGroup.advanced?.testUrl, tolerance);
       }
       if (customGroup.groupType === "load-balance") {
         return createGeneratedProxyGroup(
@@ -368,7 +411,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
           customGroup.groupType,
           resolveCustom(filteredNodeNames),
           customGroup.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
-          {}
+          extra
         );
       }
       return {
@@ -377,20 +420,22 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
         proxies: customGroup.groupType === "reject-first"
           ? resolveCustom(["REJECT", "DIRECT", ...filteredNodeNames])
           : resolveCustom(["DIRECT", "REJECT", ...filteredNodeNames]),
+        ...extra,
       };
     }
     if (customGroup.groupType === "url-test") {
-      return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames), undefined, providerUse, customGroup.advanced?.testUrl);
+      return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames), undefined, extra, customGroup.advanced?.testUrl, tolerance);
     }
     if (customGroup.groupType === "fallback") {
-      return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames));
+      return createGeneratedProxyGroup(customGroup.name, customGroup.groupType, resolveCustom(filteredNodeNames), undefined, extra);
     }
     if (customGroup.groupType === "load-balance") {
       return createGeneratedProxyGroup(
         customGroup.name,
         customGroup.groupType,
         resolveCustom(filteredNodeNames),
-        customGroup.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY
+        customGroup.strategy ?? DEFAULT_LOAD_BALANCE_STRATEGY,
+        extra
       );
     }
     if (customGroup.groupType === "direct-first") {
@@ -402,7 +447,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
             (target) => target !== customGroup.name
           )
         ),
-        ...providerUse,
+        ...extra,
       };
     }
     if (customGroup.groupType === "reject-first") {
@@ -414,14 +459,14 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
             (target) => target !== customGroup.name
           )
         ),
-        ...providerUse,
+        ...extra,
       };
     }
     return {
       name: customGroup.name,
       type: "select",
       proxies: resolveCustom(customBaseProxies.filter((target) => target !== customGroup.name)),
-      ...providerUse,
+      ...extra,
     };
   };
 
@@ -461,6 +506,18 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
   if (!insertedCustom && inlineCustomProxyGroups.length > 0) {
     for (const customGroup of inlineCustomProxyGroups) {
       groups.push(createCustomProxyGroup(customGroup));
+    }
+  }
+
+  // 仅用 use: 从 provider 取节点的组不输出空的 proxies: []（与本地配置格式一致）
+  for (const group of groups) {
+    if (
+      Array.isArray(group.proxies) &&
+      group.proxies.length === 0 &&
+      Array.isArray(group.use) &&
+      group.use.length > 0
+    ) {
+      delete group.proxies;
     }
   }
 

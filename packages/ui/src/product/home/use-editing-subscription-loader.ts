@@ -195,7 +195,7 @@ export function useEditingSubscriptionLoader({
                 tag: typeof tag === "string" && tag.trim() ? tag.trim() : undefined,
                 nameTemplate: typeof nameTemplate === "string" && nameTemplate.trim() ? nameTemplate.trim() : undefined,
                 subscriptionUserInfo: hasSubscriptionUserInfo(subscriptionUserInfo) ? subscriptionUserInfo : undefined,
-                useProxyProviders: t === "url" && useProxyProviders === true ? true : undefined,
+                useProxyProviders: t === "url" && typeof useProxyProviders === "boolean" ? useProxyProviders : undefined,
                 userinfoUrl: normalizedUserinfoUrl,
                 userinfoUserAgent:
                   t === "url" && typeof userinfoUserAgent === "string" && userinfoUserAgent.trim()
@@ -282,7 +282,7 @@ export function useEditingSubscriptionLoader({
               ...(typeof s.tag === "string" && s.tag.trim() ? { tag: s.tag.trim() } : {}),
               ...(typeof s.nameTemplate === "string" && s.nameTemplate.trim() ? { nameTemplate: s.nameTemplate.trim() } : {}),
               ...(hasSubscriptionUserInfo(s.subscriptionUserInfo) ? { subscriptionUserInfo: s.subscriptionUserInfo } : {}),
-              ...(s.type === "url" && s.useProxyProviders ? { useProxyProviders: true } : {}),
+              ...(s.type === "url" && typeof s.useProxyProviders === "boolean" ? { useProxyProviders: s.useProxyProviders } : {}),
               ...(s.type === "url" && typeof s.userinfoUrl === "string" && s.userinfoUrl.trim()
                 ? { userinfoUrl: tryNormalizeSubscriptionUrlInput(s.userinfoUrl) ?? s.userinfoUrl.trim() }
                 : {}),

@@ -301,6 +301,100 @@ describe("ProxyGroupAdvancedPanel", () => {
     expect(html).not.toContain("暂无已启用成员");
   });
 
+  it("renders the provider row with filter preview and tolerance input for url-test groups", () => {
+    mocks.store.customProxyGroups = [
+      ...mocks.store.customProxyGroups,
+      { id: "hk", name: "HK", emoji: "", groupType: "url-test" },
+    ];
+    const onChange = vi.fn();
+    const html = renderToStaticMarkup(
+      React.createElement(ProxyGroupAdvancedPanel, {
+        target: { kind: "custom", id: "hk", name: "HK" },
+        advanced: { regions: ["hk"], excludeRegex: "过期" },
+        onChange,
+        rulesCount: 0,
+        rulesContent: null,
+      }),
+    );
+
+    expect(html).toContain("订阅 provider（use:）");
+    expect(html).toContain("始终挂 use:");
+    expect(html).toContain("从不挂 use:");
+    expect(html).toContain("容差 tolerance");
+    expect(html).toContain("仅从订阅取节点");
+    expect(html).toContain("(?i)港|hk|hongkong|hong kong");
+    expect(html).toContain("exclude-filter：");
+    expect(html).toContain("过期");
+
+    const toleranceInput = mocks.inputs.find((input) => input.placeholder === "50（默认）");
+    expect(toleranceInput).toBeDefined();
+    toleranceInput.onChange({ target: { value: "" } });
+    expect(onChange).toHaveBeenCalledWith({ tolerance: undefined });
+    toleranceInput.onChange({ target: { value: "abc" } });
+    expect(onChange).toHaveBeenCalledWith({ tolerance: undefined });
+    toleranceInput.onChange({ target: { value: "150" } });
+    expect(onChange).toHaveBeenCalledWith({ tolerance: 150 });
+  });
+
+  it("marks the provider choice from the saved useProviders value", () => {
+    const htmlAlways = renderToStaticMarkup(
+      React.createElement(ProxyGroupAdvancedPanel, {
+        target: { kind: "custom", id: "media", name: "Media" },
+        advanced: { useProviders: true },
+        onChange: vi.fn(),
+        rulesCount: 0,
+        rulesContent: null,
+      }),
+    );
+    expect(htmlAlways).toMatch(/aria-pressed="true"[^<]*始终挂 use:/);
+
+    const htmlNever = renderToStaticMarkup(
+      React.createElement(ProxyGroupAdvancedPanel, {
+        target: { kind: "custom", id: "media", name: "Media" },
+        advanced: { useProviders: false },
+        onChange: vi.fn(),
+        rulesCount: 0,
+        rulesContent: null,
+      }),
+    );
+    expect(htmlNever).toMatch(/aria-pressed="true"[^<]*从不挂 use:/);
+  });
+
+  it("honors an explicit group type override and falls back to select for unknown groups", () => {
+    const htmlCustom = renderToStaticMarkup(
+      React.createElement(ProxyGroupAdvancedPanel, {
+        target: { kind: "custom", id: "media", name: "Media" },
+        advanced: { groupType: "url-test" },
+        onChange: vi.fn(),
+        rulesCount: 0,
+        rulesContent: null,
+      }),
+    );
+    expect(htmlCustom).toContain("容差 tolerance");
+
+    const htmlModule = renderToStaticMarkup(
+      React.createElement(ProxyGroupAdvancedPanel, {
+        target: { kind: "module", id: "auto", name: "Auto" },
+        advanced: { groupType: "select" },
+        onChange: vi.fn(),
+        rulesCount: 0,
+        rulesContent: null,
+      }),
+    );
+    expect(htmlModule).not.toContain("容差 tolerance");
+
+    const htmlGone = renderToStaticMarkup(
+      React.createElement(ProxyGroupAdvancedPanel, {
+        target: { kind: "custom", id: "gone", name: "Gone" },
+        advanced: {},
+        onChange: vi.fn(),
+        rulesCount: 0,
+        rulesContent: null,
+      }),
+    );
+    expect(htmlGone).not.toContain("容差 tolerance");
+  });
+
   it("normalizes advanced member helpers without rendering the panel", () => {
     const nodes = [node("US Source")];
     const moduleNames = { auto: "Auto", select: "Select" };

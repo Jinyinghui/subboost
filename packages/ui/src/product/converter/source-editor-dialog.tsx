@@ -99,7 +99,7 @@ export function SourceEditorDialog({
                             </ul>
                           </div>
                           <p className="border-t border-ink/10 pt-2 text-[10px] text-fg-40">
-                            若导入 url 报“未解析到有效节点/获取失败”等，可尝试开启此模式。
+                            订阅链接默认开启此模式；关闭后改为在站内拉取/解析节点（内联模式）。
                           </p>
                         </div>
                       </HelpPopover>

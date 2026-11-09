@@ -256,7 +256,12 @@ export function convertClashYamlToTemplate(yamlText: string, fallbacks: YamlTemp
   for (const draft of drafts) {
     const raw = draft.raw;
     const members = toStringArray(raw.proxies);
-    if (raw.use !== undefined) {
+    const useNames = toStringArray(raw.use);
+    // use: 引用按订阅 provider 保留：有 use: 的组在生成时挂 use:（useProviders），
+    // 既无显式成员又无 filter 的组按仅 provider 取节点（providerOnly）。
+    // 引用了非本站 provider 名（如 my_sub 以外）时仍提示。
+    const useLooksLocal = useNames.length > 0 && useNames.every((name) => /^my_sub(_\d+)?$/.test(name));
+    if (raw.use !== undefined && !useLooksLocal) {
       warnings.push(`分组“${draft.name}”引用了 proxy-providers（use），无法在站内解析，已忽略该引用`);
     }
     const refs: ProxyGroupMemberRef[] = [];
@@ -330,6 +335,11 @@ export function convertClashYamlToTemplate(yamlText: string, fallbacks: YamlTemp
       else if (rawStrategy) warnings.push(`分组“${draft.name}”的负载均衡策略“${rawStrategy}”不支持，已用默认策略`);
     }
 
+    const groupTolerance =
+      typeof raw.tolerance === "number" && Number.isInteger(raw.tolerance) && raw.tolerance >= 0
+        ? raw.tolerance
+        : undefined;
+
     const advanced = normalizeProxyGroupAdvancedConfig({
       ...(groupTestUrl ? { testUrl: groupTestUrl } : {}),
       ...(includeRegex ? { includeRegex } : {}),
@@ -339,6 +349,9 @@ export function convertClashYamlToTemplate(yamlText: string, fallbacks: YamlTemp
       ...(refs.length > 0 ? { extraMembers: refs } : {}),
       ...(excludedMembers.length > 0 ? { excludedMembers } : {}),
       ...(refs.length > 0 ? { memberOrder: refs } : {}),
+      ...(useNames.length > 0 ? { useProviders: true } : {}),
+      ...(useNames.length > 0 && members.length === 0 && !filter ? { providerOnly: true } : {}),
+      ...(groupTolerance !== undefined ? { tolerance: groupTolerance } : {}),
     });
 
     if (draft.moduleId) {

@@ -18,17 +18,20 @@ export const REGION_PRESETS: Array<{
   label: string;
   emoji: string;
   keywords: string[];
+  // 该地区作为 proxy-providers filter 时的正则（本地配置原文）；未设置时由 keywords 派生
+  filter?: string;
 }> = [
-  { id: "us", label: "美国", emoji: "🇺🇸", keywords: ["美国", "US", "USA", "United States", "洛杉矶", "纽约", "西雅图"] },
-  { id: "hk", label: "香港", emoji: "🇭🇰", keywords: ["香港", "HK", "Hong Kong", "港"] },
-  { id: "jp", label: "日本", emoji: "🇯🇵", keywords: ["日本", "JP", "Japan", "东京", "大阪"] },
-  { id: "sg", label: "新加坡", emoji: "🇸🇬", keywords: ["新加坡", "SG", "Singapore", "狮城"] },
-  { id: "tw", label: "台湾", emoji: "🇹🇼", keywords: ["台湾", "TW", "Taiwan", "台北"] },
-  { id: "kr", label: "韩国", emoji: "🇰🇷", keywords: ["韩国", "KR", "Korea", "首尔"] },
+  { id: "us", label: "美国", emoji: "🇺🇸", keywords: ["美国", "US", "USA", "United States", "洛杉矶", "纽约", "西雅图"], filter: "(?i)美|us|america|united states" },
+  { id: "hk", label: "香港", emoji: "🇭🇰", keywords: ["香港", "HK", "Hong Kong", "港"], filter: "(?i)港|hk|hongkong|hong kong" },
+  { id: "jp", label: "日本", emoji: "🇯🇵", keywords: ["日本", "JP", "Japan", "东京", "大阪"], filter: "(?i)日|jp|japan" },
+  { id: "sg", label: "新加坡", emoji: "🇸🇬", keywords: ["新加坡", "SG", "Singapore", "狮城"], filter: "(?i)新|狮城|sg|singapore" },
+  { id: "tw", label: "台湾", emoji: "🇹🇼", keywords: ["台湾", "TW", "Taiwan", "台北"], filter: "(?i)台|tw|taiwan" },
+  { id: "kr", label: "韩国", emoji: "🇰🇷", keywords: ["韩国", "KR", "Korea", "首尔"], filter: "(?i)韩|kr|korea" },
   { id: "uk", label: "英国", emoji: "🇬🇧", keywords: ["英国", "UK", "United Kingdom", "London", "伦敦"] },
   { id: "de", label: "德国", emoji: "🇩🇪", keywords: ["德国", "DE", "Germany", "Frankfurt", "法兰克福"] },
   { id: "fr", label: "法国", emoji: "🇫🇷", keywords: ["法国", "FR", "France", "Paris", "巴黎"] },
   { id: "ca", label: "加拿大", emoji: "🇨🇦", keywords: ["加拿大", "CA", "Canada", "Toronto", "多伦多"] },
+  { id: "nl", label: "荷兰", emoji: "🇳🇱", keywords: ["荷兰", "NL", "Netherlands"] },
   { id: "au", label: "澳大利亚", emoji: "🇦🇺", keywords: ["澳大利亚", "AU", "Australia", "Sydney", "悉尼"] },
   { id: "other", label: "其他", emoji: "🌐", keywords: [] },
 ];
@@ -90,6 +93,61 @@ function matchesRegion(nodeName: string, regions: NodeRegion[]): boolean {
   }
 
   return false;
+}
+
+function escapeRegexLiteral(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * 由地区预设派生 proxy-providers 的 filter 正则。
+ * - 有本地原文 filter 的地区用原文（去掉 (?i) 前缀后拼合）
+ * - 其余地区用 keywords 派生
+ * - "other" 无法用正向正则表达，跳过
+ */
+export function buildRegionFilterRegex(regions: NodeRegion[]): string | undefined {
+  const normalized = normalizeRegions(regions);
+  const parts: string[] = [];
+  for (const region of normalized) {
+    if (region === "other") continue;
+    // normalizeRegions 已保证 region 一定在预设里
+    const preset = REGION_PRESETS.find((item) => item.id === region)!;
+    if (preset.filter) {
+      const body = preset.filter.replace(/^\(\?i\)/, "");
+      if (body) parts.push(body);
+      continue;
+    }
+    for (const keyword of preset.keywords) {
+      const trimmed = keyword.trim();
+      if (trimmed) parts.push(escapeRegexLiteral(trimmed));
+    }
+  }
+  if (parts.length === 0) return undefined;
+  return `(?i)${parts.join("|")}`;
+}
+
+/**
+ * 解析一个组在 proxy-providers 模式下的 filter 字段。
+ * - includeRegex 优先（原样输出，与 YAML 导入的 filter → includeRegex 对称）
+ * - 否则由 regions 派生
+ * - excludeRegex 一律输出为 exclude-filter
+ * 无 provider 时返回空对象（filter 只对 provider 生效）。
+ */
+export function resolveProviderFilterFields(
+  advanced: ProxyGroupAdvancedConfig | undefined,
+  hasProviders: boolean
+): { filter?: string; "exclude-filter"?: string } {
+  if (!hasProviders) return {};
+  const normalized = normalizeProxyGroupAdvancedConfig(advanced);
+  const out: { filter?: string; "exclude-filter"?: string } = {};
+  if (normalized.includeRegex) {
+    out.filter = normalized.includeRegex;
+  } else {
+    const derived = buildRegionFilterRegex(normalized.regions ?? []);
+    if (derived) out.filter = derived;
+  }
+  if (normalized.excludeRegex) out["exclude-filter"] = normalized.excludeRegex;
+  return out;
 }
 
 function normalizeStringList(value: unknown): string[] {
@@ -194,6 +252,15 @@ export function normalizeProxyGroupAdvancedConfig(value: unknown): ProxyGroupAdv
   const excludedMembers = normalizeMemberList(item.excludedMembers);
   const memberOrder = normalizeMemberList(item.memberOrder);
   const testUrl = normalizeGroupTestUrl(item.testUrl);
+  const tolerance =
+    typeof item.tolerance === "number" &&
+    Number.isInteger(item.tolerance) &&
+    item.tolerance >= 0 &&
+    item.tolerance <= 3600000
+      ? item.tolerance
+      : undefined;
+  const providerOnly = item.providerOnly === true;
+  const useProviders = typeof item.useProviders === "boolean" ? item.useProviders : undefined;
   return {
     ...(testUrl ? { testUrl } : {}),
     ...(sourceIds.length > 0 ? { sourceIds } : {}),
@@ -205,6 +272,9 @@ export function normalizeProxyGroupAdvancedConfig(value: unknown): ProxyGroupAdv
     ...(extraMembers.length > 0 ? { extraMembers } : {}),
     ...(excludedMembers.length > 0 ? { excludedMembers } : {}),
     ...(memberOrder.length > 0 ? { memberOrder } : {}),
+    ...(tolerance !== undefined ? { tolerance } : {}),
+    ...(providerOnly ? { providerOnly: true } : {}),
+    ...(useProviders !== undefined ? { useProviders } : {}),
   };
 }
 

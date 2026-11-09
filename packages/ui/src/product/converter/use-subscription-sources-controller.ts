@@ -100,7 +100,7 @@ export function useSubscriptionSourcesController({ mode }: Options) {
 
   React.useEffect(() => {
     if (mode !== "advanced" || sources.length > 0) return;
-    setSources([{ id: "1", type: "url", content: "", nameTemplate: DEFAULT_NODE_NAME_TEMPLATE }]);
+    setSources([{ id: "1", type: "url", content: "", nameTemplate: DEFAULT_NODE_NAME_TEMPLATE, useProxyProviders: true }]);
   }, [mode, setSources, sources.length]);
 
   const expandedSourcePreviewName = React.useMemo(() => {
@@ -167,6 +167,7 @@ export function useSubscriptionSourcesController({ mode }: Options) {
         type,
         content: "",
         nameTemplate: DEFAULT_NODE_NAME_TEMPLATE,
+        ...(type === "url" ? { useProxyProviders: true as const } : {}),
       };
       setSources([...sources, newSource]);
       interactions.sourceAdded?.({
@@ -258,7 +259,7 @@ export function useSubscriptionSourcesController({ mode }: Options) {
             ...source,
             type,
             content: "",
-            useProxyProviders: type === "url" ? Boolean(source.useProxyProviders) : undefined,
+            useProxyProviders: type === "url" ? (source.useProxyProviders === false ? false : true) : undefined,
             userinfoUrl: type === "url" ? source.userinfoUrl : undefined,
             userinfoUserAgent: type === "url" ? source.userinfoUserAgent : undefined,
             lastParsedContent: undefined,

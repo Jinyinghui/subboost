@@ -483,7 +483,7 @@ describe("quick mode SourcesSection", () => {
     expect(mocks.store.setSources).toHaveBeenCalledWith([
       urlSource,
       textSource,
-      { id: "1700000000000", type: "url", content: "", nameTemplate: "[{tag}] {name}" },
+      { id: "1700000000000", type: "url", content: "", nameTemplate: "[{tag}] {name}", useProxyProviders: true },
     ]);
     expect(mocks.interactions.sourceAdded).toHaveBeenCalledWith({
       mode: "quick",
@@ -553,6 +553,20 @@ describe("quick mode SourcesSection", () => {
     expect(mocks.markSourceAsPendingImport).toHaveBeenCalledWith(expect.objectContaining({ content: "vmess://node" }));
   });
 
+  it("preserves an explicit inline opt-out when switching a source to url", () => {
+    mocks.store.sources = [{ ...textSource, useProxyProviders: false }];
+    renderSection();
+    mocks.captures.sourceTypeChoices.find((props: any) => props.value === "text").onChange("url");
+
+    expect(mocks.markSourceAsPendingImport).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "s2",
+        type: "url",
+        useProxyProviders: false,
+      })
+    );
+  });
+
   it("allows admin quota bypass and valid text-to-url switching", () => {
     vi.spyOn(Date, "now").mockReturnValue(1700000000001);
     mocks.userStore = { user: { isAdmin: true, quota: { maxImportSourcesPerType: 0 } } };
@@ -568,7 +582,7 @@ describe("quick mode SourcesSection", () => {
     expect(mocks.toast).not.toHaveBeenCalled();
     expect(mocks.store.setSources).toHaveBeenCalledWith([
       ...mocks.store.sources,
-      { id: "1700000000001", type: "url", content: "", nameTemplate: "[{tag}] {name}" },
+      { id: "1700000000001", type: "url", content: "", nameTemplate: "[{tag}] {name}", useProxyProviders: true },
     ]);
 
     mocks.store.setSources.mockClear();
@@ -581,7 +595,7 @@ describe("quick mode SourcesSection", () => {
         id: "s2",
         type: "url",
         content: "",
-        useProxyProviders: false,
+        useProxyProviders: true,
         userinfoUrl: undefined,
         userinfoUserAgent: undefined,
       })

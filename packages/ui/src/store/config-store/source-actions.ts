@@ -108,14 +108,21 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
 
   return {
     // 设置订阅源
+    // 订阅链接默认走 proxy-providers：未显式标记 useProxyProviders=false 的 URL 源
+    // 一律补为 true（新源、旧配置迁移都走这里）；显式 false（用户切回内联）保持不变。
     setSources: (sources: SubscriptionSource[]) => {
+      const normalized = sources.map((source) =>
+        source.type === "url" && source.useProxyProviders === undefined
+          ? { ...source, useProxyProviders: true as const }
+          : source
+      );
       const prev = get().sources;
       const prevIds = new Set(prev.map((s) => s.id));
-      const nextIds = new Set(sources.map((s) => s.id));
+      const nextIds = new Set(normalized.map((s) => s.id));
       const removed = new Set(Array.from(prevIds).filter((id) => !nextIds.has(id)));
 
       if (removed.size === 0) {
-        set({ sources });
+        set({ sources: normalized });
         return;
       }
 
@@ -137,7 +144,7 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
         const nextDialerProxyGroups = filterDialerProxyGroupsByAvailableNames(state.dialerProxyGroups, availableNames, state);
 
         return {
-          sources,
+          sources: normalized,
           nodes: nextNodes,
           listenerPorts: nextListenerPorts,
           dialerProxyGroups: nextDialerProxyGroups,

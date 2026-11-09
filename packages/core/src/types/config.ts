@@ -232,6 +232,7 @@ export type NodeRegion =
   | "de"
   | "fr"
   | "ca"
+  | "nl"
   | "au"
   | "other";
 
@@ -274,6 +275,12 @@ export interface ProxyGroupAdvancedConfig {
   extraMembers?: ProxyGroupMemberRef[];
   excludedMembers?: ProxyGroupMemberRef[];
   memberOrder?: ProxyGroupMemberRef[];
+  // url-test 组容差（毫秒）；未设置时生成器按 50 输出
+  tolerance?: number;
+  // 仅从订阅 provider 取节点，不列出任何显式成员（用于“手动切换”类 select 组）
+  providerOnly?: boolean;
+  // 该组是否挂 use:（订阅 provider）：true 始终挂、false 从不挂、未设置按组类型自动判断
+  useProviders?: boolean;
 }
 
 export type RuleSetMetadata = Pick<CustomRuleSet, "name" | "path" | "behavior" | "format">;

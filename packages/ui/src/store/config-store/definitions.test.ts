@@ -33,7 +33,7 @@ describe("config store definitions", () => {
 
   it("keeps initial config defaults aligned with core defaults", () => {
     expect(initialState.sources).toEqual([
-      { id: "1", type: "url", content: "" },
+      { id: "1", type: "url", content: "", useProxyProviders: true },
       { id: "2", type: "yaml", content: "" },
       { id: "3", type: "nodes", content: "" },
     ]);
