@@ -34,9 +34,17 @@ describe("config store definitions", () => {
   it("keeps initial config defaults aligned with core defaults", () => {
     expect(initialState.sources).toEqual([
       { id: "1", type: "url", content: "", useProxyProviders: true },
-      { id: "2", type: "yaml", content: "" },
-      { id: "3", type: "nodes", content: "" },
     ]);
+    expect(initialState.customProxyGroups.map((group) => group.name)).toEqual([
+      "🇭🇰 香港节点",
+      "🇯🇵 日本节点",
+      "🇺🇲 美国节点",
+      "🇨🇳 台湾节点",
+      "🇸🇬 狮城节点",
+      "🇰🇷 韩国节点",
+    ]);
+    expect(initialState.customProxyGroups.every((group) => group.includeInGroupMembers)).toBe(true);
+    expect(initialState.customProxyGroups.find((group) => group.id === "us")?.advanced?.tolerance).toBe(150);
     expect(initialState.template).toBe("minimal");
     expect(initialState.enabledProxyGroups).toBe(TEMPLATES.minimal.groups);
     expect(initialState.mixedPort).toBe(DEFAULT_SUBBOOST_CONFIG.mixedPort);

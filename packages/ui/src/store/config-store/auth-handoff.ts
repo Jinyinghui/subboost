@@ -1,5 +1,5 @@
 import type { ConfigState, SourceType, SubscriptionSource } from "./definitions";
-import { initialState } from "./definitions";
+import { DEFAULT_COUNTRY_PROXY_GROUPS, initialState } from "./definitions";
 import { safeParseJsonObject } from "@subboost/core/json";
 import { normalizeNodeNameFilterConfig } from "@subboost/core/subscription/node-name-filter";
 import { resolveProxyGroupAdvancedModeEnabled } from "@subboost/core/proxy-group-advanced-mode";
@@ -29,6 +29,26 @@ function getSessionStorage(): AuthConfigHandoffStorage | null {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (isRecord(value)) {
+    const out: Record<string, unknown> = {};
+    for (const key of Object.keys(value).sort()) {
+      if (value[key] !== undefined) out[key] = canonicalize(value[key]);
+    }
+    return out;
+  }
+  return value;
+}
+
+// 预置国家分组属于默认配置：只有相对默认值有改动（增/删/改名/改地区等）才算有意义的改动
+function hasCustomProxyGroupChanges(state: ConfigState): boolean {
+  return (
+    JSON.stringify(canonicalize(state.customProxyGroups)) !==
+    JSON.stringify(canonicalize(DEFAULT_COUNTRY_PROXY_GROUPS))
+  );
 }
 
 function stringArray(value: unknown): string[] | undefined {
@@ -117,7 +137,7 @@ function hasMeaningfulConfig(state: ConfigState): boolean {
     state.deletedNodes.length > 0 ||
     state.customRules.length > 0 ||
     state.customRuleSets.length > 0 ||
-    state.customProxyGroups.length > 0 ||
+    hasCustomProxyGroupChanges(state) ||
     hasRecordEntries(state.proxyGroupAdvanced as Record<string, unknown>) ||
     hasRecordEntries(state.builtinRuleEdits as Record<string, unknown>) ||
     state.dialerProxyGroups.length > 0 ||

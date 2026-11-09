@@ -351,6 +351,17 @@ export interface ConfigActions {
   reset: () => void;
 }
 
+// 默认预置的国家分组（与用户本地配置一致）：新建配置时自带，免得每次手动加；
+// 仍是普通自定义组，可改名、改地区/容差、可删除；includeInGroupMembers 让它们默认进节点选择。
+export const DEFAULT_COUNTRY_PROXY_GROUPS: CustomProxyGroup[] = [
+  { id: "hk", name: "🇭🇰 香港节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["hk"] } },
+  { id: "jp", name: "🇯🇵 日本节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["jp"] } },
+  { id: "us", name: "🇺🇲 美国节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["us"], tolerance: 150 } },
+  { id: "tw", name: "🇨🇳 台湾节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["tw"] } },
+  { id: "sg", name: "🇸🇬 狮城节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["sg"] } },
+  { id: "kr", name: "🇰🇷 韩国节点", emoji: "", memberSource: "filtered-nodes", includeInGroupMembers: true, groupType: "url-test", advanced: { regions: ["kr"] } },
+];
+
 export const initialState: ConfigState = {
   draftRevision: 0,
   nodes: [],
@@ -364,14 +375,12 @@ export const initialState: ConfigState = {
   },
   sources: [
     { id: "1", type: "url", content: "", useProxyProviders: true },
-    { id: "2", type: "yaml", content: "" },
-    { id: "3", type: "nodes", content: "" },
   ],
   // 默认选择“精简版”模板
   template: "minimal",
   enabledProxyGroups: TEMPLATES.minimal.groups,
   hiddenProxyGroups: [],
-  customProxyGroups: [], // 自定义分流组
+  customProxyGroups: DEFAULT_COUNTRY_PROXY_GROUPS, // 默认预置国家分组（新建配置自带）
   proxyGroupAdvanced: {},
   proxyGroupAdvancedModeEnabled: false,
   customRuleSets: [],

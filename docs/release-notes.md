@@ -1,3 +1,15 @@
+# SubBoost v2.11.6
+
+## 中文
+
+- 首页默认不再自动添加 YAML 配置 #2 和节点链接 #3 输入框：新建配置时只有订阅链接 #1，需要时再通过“添加导入源”自行加。
+- 默认预置国家分组：新建配置自带香港、日本、美国、台湾、狮城、韩国 6 个国家组（与本地配置一致，含地区表达式与美国容差 150），默认进节点选择，不用每次手动添加；仍是普通自定义组，可改名、改地区/容差、可删除。
+
+## English
+
+- The home page no longer auto-adds the YAML config (#2) and node links (#3) input boxes: a new config starts with only the subscription link (#1); add the others via "Add import source" when needed.
+- Country groups are now preset by default: a new config includes the Hong Kong, Japan, US, Taiwan, Singapore and Korea groups (matching the local config, including region expressions and US tolerance 150), included in node selection by default, so they no longer need manual adding every time; they remain ordinary custom groups that can be renamed, retuned or deleted.
+
 # SubBoost v2.11.5
 
 ## 中文

@@ -76,6 +76,7 @@ describe("custom config-store actions", () => {
 
   it("adds, removes, and renames custom proxy groups while updating matching rules", () => {
     const { actions, getState } = createHarness({
+      customProxyGroups: [],
       customRules: [
         rule({ id: "r1", target: "Old Group" }),
         rule({ id: "r2", target: "DIRECT" }),
