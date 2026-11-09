@@ -1,3 +1,13 @@
+# SubBoost v2.11.8
+
+## 中文
+
+- 修复 proxy-providers 模式下分流代理组里点选未启用成员无效的问题：订阅走 provider 模式时站内不拉取节点，面板里“节点为空就清空已启用成员”的旧逻辑会把已生成组里的代理组成员（DIRECT / 自动选择 / 国家分组等）也一并藏掉，导致未启用栏点谁都加不进已启用栏。现在已启用成员直接按生成结果显示，点选可正常追加。
+
+## English
+
+- Fixed selecting a disabled member in a proxy group doing nothing in proxy-providers mode: with provider mode the site fetches no nodes, and the panel's old "no nodes means no included members" shortcut also hid generated proxy-group members (DIRECT / auto-select / country groups), so clicking any disabled member never moved it to the included list. Included members now follow the generated result, and clicking adds members normally.
+
 # SubBoost v2.11.7
 
 ## 中文

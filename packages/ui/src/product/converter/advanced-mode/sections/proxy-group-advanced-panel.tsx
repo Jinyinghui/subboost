@@ -233,9 +233,11 @@ export function ProxyGroupAdvancedPanel({
     proxyGroupNameOverrides,
   ]);
   const generatedProxyNames = React.useMemo(() => {
-    if (effectiveNodes.length === 0) return [];
+    // 注意：不要在节点为空时短路返回 []——proxy-providers 模式下订阅节点不拉取，
+    // 但组里仍有代理组成员（DIRECT / 自动选择 / 国家分组等）；短路会让已启用成员
+    // 永远为空，未启用栏点选后也无法追加到已启用栏。
     return generatedProxyGroups.find((group) => group.name === target.name)?.proxies ?? [];
-  }, [effectiveNodes.length, generatedProxyGroups, target.name]);
+  }, [generatedProxyGroups, target.name]);
 
   const candidateMembers = React.useMemo(() => {
     const rawNames = [

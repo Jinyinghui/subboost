@@ -431,4 +431,43 @@ describe("ProxyGroupAdvancedPanel interactions", () => {
       memberOrder: [],
     });
   });
+
+  it("shows generated group members as included when there are no nodes (proxy-providers mode)", () => {
+    const onChange = vi.fn();
+    // proxy-providers 模式下订阅节点不拉取：nodes 为空，但生成结果里仍有代理组成员
+    mocks.store.nodes = [];
+    mocks.store.customProxyGroups = [
+      { id: "jp", name: "🇯🇵 日本节点", emoji: "", groupType: "url-test", includeInGroupMembers: false },
+      { id: "other", name: "Other", emoji: "", groupType: "select" },
+    ];
+    mocks.generatedProxyGroups = [
+      { name: "Select", proxies: ["Auto", "DIRECT", "🇯🇵 日本节点"] },
+      { name: "Auto", proxies: [] },
+    ];
+    const tree = ProxyGroupAdvancedPanel({
+      target: { kind: "module", id: "select", name: "Select" },
+      advanced: {},
+      onChange,
+      rulesCount: 0,
+      rulesContent: null,
+    });
+    const elements = flattenElements(tree);
+    const includedRows = elements.filter((element) => element.props.draggable);
+    // 已生成的成员（Auto / DIRECT / 日本节点）应出现在已启用栏目，而不是全落到未启用
+    expect(includedRows).toHaveLength(3);
+    const jpEnableButton = elements.find(
+      (element) => element.type === "button" && element.props.title === "🇯🇵 日本节点",
+    );
+    expect(jpEnableButton).toBeUndefined();
+    // 未启用的 Other 点一下仍应走 extraMembers
+    const otherEnableButton = elements.find(
+      (element) => element.type === "button" && element.props.title === "Other",
+    );
+    otherEnableButton?.props.onClick();
+    expect(onChange).toHaveBeenCalledWith(
+      expect.objectContaining({
+        extraMembers: expect.arrayContaining([expect.objectContaining({ kind: "custom", id: "other" })]),
+      }),
+    );
+  });
 });
