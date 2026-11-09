@@ -84,6 +84,34 @@ describe("self-host shell scripts", () => {
     expect(result.stdout).not.toContain("unexpected-success");
   });
 
+  it("leaves the update status file writable by the app user after ops_write_status", () => {
+    const result = runBash(`
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      source local/scripts/subboost.sh
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      OPS_DIR="$home/ops"
+      OPS_STATUS_FILE="$OPS_DIR/update-status.json"
+      OPS_UPDATE_LOG="$OPS_DIR/update.log"
+      mkdir -p "$OPS_DIR"
+      sudo_do() { "$@"; }
+      ops_write_status "failed" "更新失败（exit 1）"
+      owner="$(stat -c %u "$OPS_STATUS_FILE")"
+      mode="$(stat -c %a "$OPS_STATUS_FILE")"
+      printf 'owner=%s mode=%s\\n' "$owner" "$mode"
+      writable=no
+      if [ "$owner" = "1000" ]; then writable=yes; fi
+      # 其他用户写位是八进制模式的 002 位（不是权限字符串的最后一个字符）
+      if [ $(( 8#$mode & 2 )) -ne 0 ]; then writable=yes; fi
+      printf 'app-writable=%s\\n' "$writable"
+    `);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("app-writable=yes");
+    expect(result.stdout).not.toContain("app-writable=no");
+  });
+
   it("uses prompt defaults without /dev/tty errors in non-interactive mode", () => {
     const result = runBash(`
       set -Eeuo pipefail

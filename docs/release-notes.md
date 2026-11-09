@@ -1,3 +1,13 @@
+# SubBoost v2.11.12
+
+## 中文
+
+- 根治网页端更新报“无法记录更新状态”的问题：更新状态文件（`/ops/update-status.json`）由网站（`node` 用户）与宿主机 updater（root）轮流写，之前 root 写完后网站就写不了，下次点更新还没开始就失败。现在 updater 每次写完状态文件都会把它改回网站用户所有（改不了时退到所有人可写），网站端不再被锁在外面。之前遇到这个报错时，删掉该状态文件即可恢复（网站下次点更新时会重建）。
+
+## English
+
+- Fixes the root cause of the in-site update error "failed to record update status": the update status file (`/ops/update-status.json`) is written alternately by the website (`node` user) and the host updater (root), and after root wrote it the website could no longer overwrite it, so the next web update failed before starting. The updater now hands the file back to the website user after every write (falling back to world-writable when chown is unavailable). If you hit this error on an older version, deleting the status file restores it (the website recreates it on the next update request).
+
 # SubBoost v2.11.11
 
 ## 中文

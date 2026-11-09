@@ -448,6 +448,11 @@ ops_write_status() {
     printf '}\n'
   } > "$tmp_status"
   sudo_do mv "$tmp_status" "$OPS_STATUS_FILE"
+  # 状态文件由网站（node 用户，uid OPS_APP_UID）与宿主机 updater（root）轮流写：
+  # root 写完后须让网站用户仍可覆盖，否则下次网页端更新在记录请求时就写失败。
+  # chown 不可用时退到 0666，与 ensure_update_watcher 处理 OPS_DIR 的方式一致。
+  sudo_do chown "$OPS_APP_UID:$OPS_APP_UID" "$OPS_STATUS_FILE" 2>/dev/null \
+    || sudo_do chmod 0666 "$OPS_STATUS_FILE" || true
 }
 
 ensure_update_watcher() {
