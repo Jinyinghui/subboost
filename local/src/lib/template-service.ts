@@ -1,4 +1,5 @@
 import { buildDefaultSubBoostTemplateConfig } from "@subboost/core/config/defaults";
+import { PROXY_GROUP_MODULES } from "@subboost/core/generator/proxy-groups";
 import {
   builtinIdToType,
   getBuiltinTemplateId,
@@ -6,6 +7,7 @@ import {
 } from "@subboost/core/templates/builtin";
 import { getTemplateList } from "@subboost/core/templates";
 import { validateSubBoostTemplateConfig } from "@subboost/core/templates/config-template";
+import { normalizeRuleModelFromConfig } from "@subboost/core/rules/rule-model";
 import type { SubBoostTemplateConfig } from "@subboost/core/types/template-config";
 import type { TemplateTab } from "@subboost/server-core/templates";
 import { decryptJsonObject, encryptJson } from "./crypto";
@@ -68,7 +70,7 @@ function builtinSummaries(): LocalTemplateSummary[] {
 function formatLocalTemplate(row: LocalTemplateRow): LocalTemplateSummary {
   const config = decryptJsonObject(row.encryptedConfig);
   const proxyGroupCount = Array.isArray(config.enabledProxyGroups) ? config.enabledProxyGroups.length : null;
-  const ruleCount = Array.isArray(config.ruleOrder) ? config.ruleOrder.length : null;
+  const ruleCount = countTemplateRules(config);
   return {
     id: row.id,
     name: row.name,
@@ -83,6 +85,26 @@ function formatLocalTemplate(row: LocalTemplateRow): LocalTemplateSummary {
     proxyGroupCount,
     ruleCount,
   };
+}
+
+function countTemplateRules(config: unknown): number | null {
+  // ruleOrder 为 [] 时表示“使用默认顺序”，不是 0 条规则：按内置模板卡片
+  // 同款口径统计——可见代理组的内置规则数 + 自定义规则 + 自定义规则集。
+  const record = asRecord(config);
+  if (!record || !Array.isArray(record.enabledProxyGroups)) return null;
+  const hidden = new Set(
+    Array.isArray(record.hiddenProxyGroups)
+      ? record.hiddenProxyGroups.filter((id): id is string => typeof id === "string")
+      : []
+  );
+  const ruleModel = normalizeRuleModelFromConfig(config);
+  let count = ruleModel.customRuleSets.length;
+  if (Array.isArray(record.customRules)) count += record.customRules.length;
+  for (const groupId of record.enabledProxyGroups) {
+    if (typeof groupId !== "string" || hidden.has(groupId)) continue;
+    count += PROXY_GROUP_MODULES.find((module) => module.id === groupId)?.rules.length ?? 0;
+  }
+  return count;
 }
 
 function filterByIds<T extends { id: string }>(items: T[], ids: string[]): T[] {

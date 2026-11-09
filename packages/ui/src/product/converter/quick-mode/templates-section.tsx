@@ -21,7 +21,13 @@ export function TemplatesSection() {
   const [catalogSearch, setCatalogSearch] = React.useState("");
   const [catalogApplyingId, setCatalogApplyingId] = React.useState<string | null>(null);
 
-  const { template: selectedTemplate, setTemplate, applyTemplateConfig, setAppliedTemplateId } = useConfigStore();
+  const {
+    template: selectedTemplate,
+    appliedTemplateId,
+    setTemplate,
+    applyTemplateConfig,
+    setAppliedTemplateId,
+  } = useConfigStore();
   const { user } = useUserStore();
   const templateApi = useProductApiAdapter().templates;
   const interactions = useProductInteractionAdapter();
@@ -45,6 +51,20 @@ export function TemplatesSection() {
     standard: { id: BUILTIN_TEMPLATE_IDS.standard, engagementCount: 0, isEngaged: false },
     full: { id: BUILTIN_TEMPLATE_IDS.full, engagementCount: 0, isEngaged: false },
   });
+  const [catalogAppliedTemplate, setCatalogAppliedTemplate] = React.useState<{ id: string; name: string } | null>(null);
+
+  // 内置卡片是否高亮以“最后实际应用的模板”为准，而不是 template 字段：
+  // 应用“我保存的模板”后 config.template 仍是 full，直接用 template 判断
+  // 会让完整版一直显示被选中。appliedTemplateId 为空时退回 template 字段。
+  const isBuiltinTemplateActive = (id: TemplateType) =>
+    appliedTemplateId ? appliedTemplateId === BUILTIN_TEMPLATE_IDS[id] : selectedTemplate === id;
+  const isCatalogTemplateApplied =
+    Boolean(appliedTemplateId) && !Object.values(BUILTIN_TEMPLATE_IDS).includes(appliedTemplateId as string);
+  const catalogAppliedName = isCatalogTemplateApplied
+    ? catalogAppliedTemplate?.id === appliedTemplateId
+      ? catalogAppliedTemplate.name
+      : "自定义模板"
+    : null;
 
   React.useEffect(() => {
     if (!loadBuiltinTemplateEngagement) return;
@@ -155,6 +175,7 @@ export function TemplatesSection() {
 
       if (tpl.kind === "config" && tpl.config && typeof tpl.config === "object") {
         setAppliedTemplateId(id);
+        setCatalogAppliedTemplate({ id, name: tpl.name || "未命名模板" });
         applyTemplateConfig(tpl.config as SubBoostTemplateConfig);
         setCatalogOpen(false);
         setCatalogSearch("");
@@ -200,13 +221,13 @@ export function TemplatesSection() {
               key={template.id}
               className={cn(
                 "p-2.5 transition-all border-2",
-                selectedTemplate === template.id ? "border-indigo-500 bg-indigo-500/10" : "border-transparent hover:border-ink/20"
+                isBuiltinTemplateActive(template.id) ? "border-indigo-500 bg-indigo-500/10" : "border-transparent hover:border-ink/20"
               )}
             >
               <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  aria-pressed={selectedTemplate === template.id}
+                  aria-pressed={isBuiltinTemplateActive(template.id)}
                   aria-label={`选择 ${template.name} 模板`}
                   className="flex min-w-0 flex-1 items-center justify-between gap-3 text-left"
                   onClick={() => {
@@ -221,10 +242,10 @@ export function TemplatesSection() {
                   <div
                     className={cn(
                       "w-4 h-4 rounded-full border-2 flex items-center justify-center",
-                      selectedTemplate === template.id ? "border-indigo-500" : "border-ink/30"
+                      isBuiltinTemplateActive(template.id) ? "border-indigo-500" : "border-ink/30"
                     )}
                   >
-                    {selectedTemplate === template.id && <div className="w-2 h-2 rounded-full bg-indigo-500" />}
+                    {isBuiltinTemplateActive(template.id) && <div className="w-2 h-2 rounded-full bg-indigo-500" />}
                   </div>
                   <div>
                     <div className="flex items-center gap-2">
@@ -262,11 +283,17 @@ export function TemplatesSection() {
 
           {catalogEnabled && (
             <Card
-              className="p-2.5 transition-all border-2 border-dashed border-ink/15 hover:border-ink/25 bg-ink/5"
+              className={cn(
+                "p-2.5 transition-all border-2",
+                isCatalogTemplateApplied
+                  ? "border-indigo-500 bg-indigo-500/10"
+                  : "border-dashed border-ink/15 hover:border-ink/25 bg-ink/5"
+              )}
             >
               <button
                 type="button"
                 aria-label={`打开${catalogName}`}
+                aria-pressed={isCatalogTemplateApplied}
                 className="flex w-full items-center justify-between text-left"
                 onClick={() => {
                   setCatalogOpen(true);
@@ -274,12 +301,20 @@ export function TemplatesSection() {
                 }}
               >
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-4 h-4 rounded-full border-2 border-ink/30 flex items-center justify-center flex-shrink-0">
+                  <div
+                    className={cn(
+                      "w-4 h-4 rounded-full border-2 flex items-center justify-center flex-shrink-0",
+                      isCatalogTemplateApplied ? "border-indigo-500" : "border-ink/30"
+                    )}
+                  >
                     <Globe className="h-3 w-3 text-indigo-400" />
                   </div>
                   <div className="min-w-0">
                     <span className="text-sm font-medium text-fg">{catalogName}</span>
                     <p className="text-xs text-fg-40 mt-0.5 truncate">{catalogDescription}</p>
+                    {isCatalogTemplateApplied && (
+                      <p className="text-xs text-indigo-400 mt-0.5 truncate">已应用：{catalogAppliedName}</p>
+                    )}
                   </div>
                 </div>
                 <div className="text-right text-xs text-fg-40 flex-shrink-0">

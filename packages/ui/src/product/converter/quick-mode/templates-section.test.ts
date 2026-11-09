@@ -180,6 +180,7 @@ describe("quick mode TemplatesSection", () => {
     mocks.captures = { buttons: [], cards: [], inputs: [], rawButtons: [] };
     mocks.store = {
       template: "minimal",
+      appliedTemplateId: "builtin-minimal",
       setTemplate: vi.fn(),
       applyTemplateConfig: vi.fn(),
       setAppliedTemplateId: vi.fn(),
@@ -249,6 +250,7 @@ describe("quick mode TemplatesSection", () => {
 
     expect(setters[4]).toHaveBeenCalledWith("tpl-config");
     expect(mocks.store.setAppliedTemplateId).toHaveBeenCalledWith("tpl-config");
+    expect(setters[6]).toHaveBeenCalledWith({ id: "tpl-config", name: "VPN Config" });
     expect(mocks.store.applyTemplateConfig).toHaveBeenCalledWith({ template: "full" });
     expect(setters[0]).toHaveBeenCalledWith(false);
     expect(setters[3]).toHaveBeenCalledWith("");
@@ -259,6 +261,22 @@ describe("quick mode TemplatesSection", () => {
     });
     expect(mocks.toast).toHaveBeenCalledWith(expect.objectContaining({ title: "已应用模板：VPN Config", variant: "success" }));
     expect(setters[4]).toHaveBeenCalledWith(null);
+  });
+
+  it("does not highlight a builtin template after applying a catalog template", () => {
+    mocks.store.template = "full";
+    mocks.store.appliedTemplateId = "tpl-config";
+    const { html } = renderSection({ 6: { id: "tpl-config", name: "我的模板A" } });
+
+    const fullButton = mocks.captures.rawButtons.find(
+      (props: any) => props["aria-label"] === "选择 Full 模板"
+    );
+    expect(fullButton["aria-pressed"]).toBe(false);
+    const catalogButton = mocks.captures.rawButtons.find(
+      (props: any) => props["aria-label"] === "打开Catalog"
+    );
+    expect(catalogButton["aria-pressed"]).toBe(true);
+    expect(html).toContain("已应用：我的模板A");
   });
 
   it("rejects unsupported catalog templates and missing details", async () => {

@@ -73,7 +73,7 @@ describe("local template service", () => {
       return null;
     });
     mocks.buildDefaultSubBoostTemplateConfig.mockReturnValue({ template: "minimal" });
-    mocks.decryptJsonObject.mockReturnValue({ enabledProxyGroups: ["auto"], ruleOrder: ["MATCH"] });
+    mocks.decryptJsonObject.mockReturnValue({ enabledProxyGroups: ["ad", "private"], ruleOrder: [] });
     mocks.encryptJson.mockReturnValue("encrypted-new");
     mocks.validateSubBoostTemplateConfig.mockReturnValue({ ok: true, config: { rules: [] } });
   });
@@ -104,8 +104,8 @@ describe("local template service", () => {
         isOfficial: false,
         isPublic: false,
         isOwner: true,
-        proxyGroupCount: 1,
-        ruleCount: 1,
+        proxyGroupCount: 2,
+        ruleCount: 3,
       },
     ]);
     expect(mocks.prisma.localTemplate.findMany).toHaveBeenCalledWith({
@@ -131,11 +131,35 @@ describe("local template service", () => {
       name: "Local Template",
       description: "",
       kind: "config",
-      config: { enabledProxyGroups: ["auto"], ruleOrder: ["MATCH"] },
+      config: { enabledProxyGroups: ["ad", "private"], ruleOrder: [] },
     });
 
     mocks.prisma.localTemplate.findFirst.mockResolvedValueOnce(null);
     await expect(getTemplateDetail("owner-1", "missing")).resolves.toBeNull();
+  });
+
+  it("counts rules from enabled groups and custom entries even when ruleOrder is empty", async () => {
+    mocks.decryptJsonObject.mockReturnValueOnce({
+      enabledProxyGroups: ["ad", "private", "cn"],
+      hiddenProxyGroups: ["private"],
+      customRules: [
+        { id: "r1", type: "domain", value: "example.com", target: "select" },
+        { id: "r2", type: "domain", value: "example.org", target: "select" },
+      ],
+      customRuleSets: [
+        { id: "rs1", name: "RS", format: "mrs", behavior: "domain", path: "geosite/test.mrs", target: "select" },
+      ],
+      ruleOrder: [],
+    });
+    mocks.prisma.localTemplate.findMany.mockResolvedValueOnce([row()]);
+    await expect(listTemplates("owner-1", "my")).resolves.toEqual([
+      expect.objectContaining({
+        id: "local-1",
+        proxyGroupCount: 3,
+        // ad(1) + cn(2) + custom rules(2) + custom rule sets(1); hidden private(2) excluded.
+        ruleCount: 6,
+      }),
+    ]);
   });
 
   it("creates validated local templates and rejects invalid payloads", async () => {
