@@ -1,3 +1,15 @@
+# SubBoost v2.11.19
+
+## 中文
+
+- 设置页“系统更新”卡片现在能实时看到更新进度：更新进行中时，卡片里直接显示更新日志的实时尾部（每 4 秒刷新，自动滚动到底），顶部还有一行最新进度（如 `df81fddd1aae Downloading 115.3MB`），不用再到终端 `tail` 日志。更新失败时也能看到同样的日志，方便定位原因。
+- 实现上是接口直接读宿主更新器持续追加的 `update.log`（和状态文件在同一个 `/ops` 目录，容器内可读），不再用状态文件里安装时留下的旧 `logTail`；日志文件默认 644，容器内 node 用户可读，无需改更新脚本。
+
+## English
+
+- The settings "System update" card now shows live update progress: while an update is running, the card displays the live tail of the update log (refreshed every 4 seconds, auto-scrolled to the bottom), with the latest progress line on top (e.g. `df81fddd1aae Downloading 115.3MB`), so there is no need to `tail` the log in a terminal. The same log is shown when an update fails, to help locate the cause.
+- Implementation: the API reads `update.log`, which the host updater keeps appending (same `/ops` directory as the status file, readable from the container), instead of the stale `logTail` left in the status file at install time. The log file is 644 by default, readable by the in-container node user, so no updater script change was needed.
+
 # SubBoost v2.11.18
 
 ## 中文

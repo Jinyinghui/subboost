@@ -1,6 +1,6 @@
 {
   "name": "@subboost/local",
-  "version": "2.11.18",
+  "version": "2.11.19",
   "license": "AGPL-3.0-only",
   "private": true,
   "type": "module",

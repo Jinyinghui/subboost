@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@subboost/ui/component
 import { SwitchField } from "@subboost/ui/components/ui/switch-field";
 import { useUserStore } from "@subboost/ui/store/user-store";
 
+import { UpdateLogPanel } from "./update-log-panel";
+
 type SelfUpdateState = "idle" | "requested" | "running" | "succeeded" | "failed";
 
 type SelfUpdateStatus = {
@@ -314,10 +316,13 @@ export default function SettingsPage() {
               </p>
             )}
             {updateInfo?.status.state === "requested" || updateInfo?.status.state === "running" ? (
-              <p className="text-xs text-indigo-300">
-                {updateInfo.status.message || "正在更新，服务会短暂重启，请稍候……"}
-                {updatePollErrors > 0 && "（服务重启中）"}
-              </p>
+              <div className="space-y-2">
+                <p className="text-xs text-indigo-300">
+                  {updateInfo.status.message || "正在更新，服务会短暂重启，请稍候……"}
+                  {updatePollErrors > 0 && "（服务重启中）"}
+                </p>
+                <UpdateLogPanel logTail={updateInfo.status.logTail} />
+              </div>
             ) : updateInfo?.status.state === "succeeded" ? (
               <p className="text-xs text-emerald-300">
                 更新完成
@@ -328,11 +333,7 @@ export default function SettingsPage() {
             ) : updateInfo?.status.state === "failed" ? (
               <div className="space-y-2">
                 <p className="text-xs text-red-300">{updateInfo.status.message || "更新失败"}</p>
-                {updateInfo.status.logTail && (
-                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded-md bg-ink/5 px-3 py-2 text-xs text-fg-70">
-                    {updateInfo.status.logTail}
-                  </pre>
-                )}
+                <UpdateLogPanel logTail={updateInfo.status.logTail} />
               </div>
             ) : (
               updateInfo?.hasUpdate && <p className="text-xs">发现新版本，可以一键更新。</p>

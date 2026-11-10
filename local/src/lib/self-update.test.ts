@@ -26,7 +26,13 @@ vi.mock("node:fs", () => ({
   }),
 }));
 
-import { fetchLatestRelease, readUpdateStatus, requestSelfUpdate, SelfUpdateError } from "./self-update";
+import {
+  fetchLatestRelease,
+  readUpdateStatus,
+  requestSelfUpdate,
+  SelfUpdateError,
+  UPDATE_LOG_TAIL_LINES,
+} from "./self-update";
 
 const originalOpsDir = process.env.SUBBOOST_OPS_DIR;
 const originalReleaseUrl = process.env.SUBBOOST_RELEASE_URL;
@@ -82,6 +88,59 @@ describe("self-update lib", () => {
     expect(result.watcherEnabled).toBe(true);
     expect(result.status.state).toBe("running");
     expect(result.status.targetVersion).toBe("2.11.3");
+  });
+
+  it("returns the live update log tail instead of the stale status logTail", () => {
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    files.set(
+      "/ops/update-status.json",
+      JSON.stringify({ state: "running", targetVersion: "2.11.3", logTail: "安装时的旧文本" })
+    );
+    files.set(
+      "/ops/update.log",
+      [
+        "[+] pull 2/3",
+        "df81fddd1aae Downloading 100.0MB",
+        "df81fddd1aae Downloading 115.3MB",
+      ].join("\n")
+    );
+    const result = readUpdateStatus();
+    expect(result.status.logTail).toBe(
+      [
+        "[+] pull 2/3",
+        "df81fddd1aae Downloading 100.0MB",
+        "df81fddd1aae Downloading 115.3MB",
+      ].join("\n")
+    );
+  });
+
+  it("returns null logTail when the update log is missing", () => {
+    files.set("/ops", "");
+    files.set("/ops/watcher.json", JSON.stringify({ installed: true }));
+    files.set("/ops/update-status.json", JSON.stringify({ state: "running", targetVersion: "2.11.3" }));
+    expect(readUpdateStatus().status.logTail).toBeNull();
+  });
+
+  it("returns null logTail when the update log is blank", () => {
+    files.set("/ops", "");
+    files.set("/ops/update.log", "\n\n");
+    expect(readUpdateStatus().status.logTail).toBeNull();
+  });
+
+  it("caps the log tail at the last lines and the size window", () => {
+    files.set("/ops", "");
+    const lines = Array.from({ length: UPDATE_LOG_TAIL_LINES + 5 }, (_, index) => `line ${index}`);
+    files.set("/ops/update.log", `${lines.join("\n")}\n`);
+    const tail = readUpdateStatus().status.logTail;
+    expect(tail).toBe(lines.slice(-UPDATE_LOG_TAIL_LINES).join("\n"));
+
+    const bigLine = "x".repeat(2000);
+    files.set("/ops/update.log", `${Array.from({ length: 200 }, () => bigLine).join("\n")}\nlast line\n`);
+    expect(readUpdateStatus().status.logTail).toContain("last line");
+    expect(readUpdateStatus().status.logTail?.split("\n").length).toBeLessThanOrEqual(
+      UPDATE_LOG_TAIL_LINES
+    );
   });
 
   it("refuses a request when the ops directory is missing", () => {

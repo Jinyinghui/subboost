@@ -49,6 +49,37 @@ function statusFile(): string {
   return `${opsDir()}/update-status.json`;
 }
 
+function logFile(): string {
+  return `${opsDir()}/update.log`;
+}
+
+/** 日志面板每次显示的尾行数。 */
+export const UPDATE_LOG_TAIL_LINES = 40;
+
+const UPDATE_LOG_TAIL_MAX_BYTES = 128 * 1024;
+
+/**
+ * 直接读更新日志的实时尾部。状态文件里的 logTail 是安装时留下的旧文本，
+ * 不能反映进行中的拉取进度；日志文件由宿主更新器持续追加，和状态文件在
+ * 同一个 /ops 目录下，容器内可读。
+ */
+function readUpdateLogTail(): string | null {
+  try {
+    let content = readFileSync(logFile(), "utf8");
+    if (content.length > UPDATE_LOG_TAIL_MAX_BYTES) {
+      content = content.slice(content.length - UPDATE_LOG_TAIL_MAX_BYTES);
+    }
+    const lines = content
+      .split("\n")
+      .map((line) => line.trimEnd())
+      .filter((line) => line.length > 0);
+    if (lines.length === 0) return null;
+    return lines.slice(-UPDATE_LOG_TAIL_LINES).join("\n");
+  } catch {
+    return null;
+  }
+}
+
 function watcherFile(): string {
   return `${opsDir()}/watcher.json`;
 }
@@ -94,10 +125,9 @@ function normalizeStatus(record: Record<string, unknown> | null): SelfUpdateStat
 
 export function readUpdateStatus(): { watcherEnabled: boolean; status: SelfUpdateStatus } {
   const watcher = readJsonObject(watcherFile());
-  return {
-    watcherEnabled: watcher?.installed === true,
-    status: normalizeStatus(readJsonObject(statusFile())),
-  };
+  const status = normalizeStatus(readJsonObject(statusFile()));
+  // 状态文件里的 logTail 是旧文本，改用 live 日志尾部，页面才能看到实时进度。
+  return { watcherEnabled: watcher?.installed === true, status: { ...status, logTail: readUpdateLogTail() } };
 }
 
 export function requestSelfUpdate(adminId: string, targetVersion: string | null): SelfUpdateStatus {
