@@ -69,7 +69,9 @@ describe("country-groups", () => {
     expect(matchRegionForCountryName("France")).toBe("fr");
     expect(matchRegionForCountryName("伦敦")).toBe("uk");
     expect(matchRegionForCountryName("美国")).toBe("us");
-    expect(matchRegionForCountryName("泰国")).toBe(null);
+    expect(matchRegionForCountryName("泰国")).toBe("th");
+    expect(matchRegionForCountryName("越南")).toBe("vn");
+    expect(matchRegionForCountryName("毛里求斯")).toBe(null);
     expect(matchRegionForCountryName("")).toBe(null);
     expect(matchRegionForCountryName("节点")).toBe(null);
   });
@@ -99,18 +101,18 @@ describe("country-groups", () => {
   });
 
   it("builds a draft from an unknown name with an auto-generated expression", () => {
-    expect(buildCountryGroupDraft("泰国")).toEqual({
-      name: "泰国节点",
+    expect(buildCountryGroupDraft("毛里求斯")).toEqual({
+      name: "毛里求斯节点",
       emoji: "",
       memberSource: "filtered-nodes",
       includeInGroupMembers: true,
       groupType: "url-test",
-      advanced: { includeRegex: "(?i)泰国" },
+      advanced: { includeRegex: "(?i)毛里求斯" },
     });
-    expect(buildCountryGroupDraft("Thailand")).toEqual(
+    expect(buildCountryGroupDraft("Mauritius")).toEqual(
       expect.objectContaining({
-        name: "Thailand节点",
-        advanced: { includeRegex: "(?i)Thailand" },
+        name: "Mauritius节点",
+        advanced: { includeRegex: "(?i)Mauritius" },
       }),
     );
     expect(buildCountryGroupDraft("  ")).toBe(null);

@@ -63,6 +63,33 @@ describe("useConfigStore", () => {
     });
   }, 15_000);
 
+  it("syncs country groups when nodes change", async () => {
+    const { useConfigStore } = await loadStore();
+
+    // 初始 12 个预置国家分组都在；加入一个香港节点后只留香港启用，其余禁用
+    useConfigStore
+      .getState()
+      .parseContent("ss://YWVzLTEyOC1nY206dGVzdA@hk.example.com:8388#香港-01");
+    const state = useConfigStore.getState();
+    expect(state.nodes.map((node) => node.name)).toContain("香港-01");
+    expect(state.customProxyGroups.find((group) => group.id === "hk")?.enabled).not.toBe(false);
+    expect(state.customProxyGroups.find((group) => group.id === "us")?.enabled).toBe(false);
+    expect(state.customProxyGroups.find((group) => group.id === "jp")?.enabled).toBe(false);
+
+    // 再加入一个印度节点：自动追加印度分组
+    useConfigStore
+      .getState()
+      .parseContent("ss://YWVzLTEyOC1nY206dGVzdA@in.example.com:8388#印度-01");
+    const next = useConfigStore.getState();
+    expect(next.customProxyGroups.find((group) => group.id === "in")?.name).toBe("🇮🇳 印度节点");
+
+    // 清空节点：全部国家分组禁用
+    useConfigStore.getState().clearNodes();
+    expect(
+      useConfigStore.getState().customProxyGroups.every((group) => group.enabled === false),
+    ).toBe(true);
+  }, 15_000);
+
   it("switches config draft storage scopes and regenerates restored drafts", async () => {
     const storage = createMemoryStorage({
       "subboost-config:user:u1": JSON.stringify({

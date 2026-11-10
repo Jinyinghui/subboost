@@ -7,6 +7,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { ConfigActions, ConfigState } from "./config-store/definitions";
 import { initialState } from "./config-store/definitions";
 import { computeGeneratedYamlResult } from "./config-store/generated-yaml";
+import { syncCountryGroupsWithNodes } from "./config-store/country-groups-sync";
 import { createSourceActions } from "./config-store/source-actions";
 import { createNodeActions } from "./config-store/actions/node-actions";
 import { createTemplateActions } from "./config-store/actions/template-actions";
@@ -60,10 +61,20 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
           if (patch === state) return state;
 
           const next = { ...state, ...(patch as Partial<StoreState>) } as StoreState;
+          let resultPatch = patch as Partial<StoreState>;
+          // 节点变化时自动同步国家分组（启用/禁用/追加），再算生成配置。
+          const patchNodes = (patch as Partial<StoreState>).nodes;
+          if (patchNodes && patchNodes !== state.nodes) {
+            const synced = syncCountryGroupsWithNodes(next.customProxyGroups, patchNodes);
+            if (synced !== next.customProxyGroups) {
+              resultPatch = { ...resultPatch, customProxyGroups: synced };
+              next.customProxyGroups = synced;
+            }
+          }
           const { yaml, error } = computeGeneratedYamlResult(next);
 
-          if (yaml === next.generatedYaml && error === next.generatedYamlError) return patch as Partial<StoreState>;
-          return { ...(patch as Partial<StoreState>), generatedYaml: yaml, generatedYamlError: error };
+          if (yaml === next.generatedYaml && error === next.generatedYamlError) return resultPatch;
+          return { ...resultPatch, generatedYaml: yaml, generatedYamlError: error };
         });
       };
 

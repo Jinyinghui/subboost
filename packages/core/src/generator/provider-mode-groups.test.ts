@@ -17,10 +17,9 @@ function countryGroup(id: string, name: string, regions: NodeRegion[], tolerance
     memberSource: "filtered-nodes",
     includeInGroupMembers: true,
     groupType: "url-test",
+    // 国家分组默认挂 use:（不写 useProviders 即可）；本文件的用例验证的是默认挂 use: 时的本地格式输出
     advanced: {
       regions,
-      // 国家分组明确挂 use:（默认不挂）；本文件的用例验证的是挂 use: 时的本地格式输出
-      useProviders: true,
       ...(tolerance !== undefined ? { tolerance } : {}),
     },
   };
@@ -106,7 +105,7 @@ describe("provider-mode local format", () => {
     expect(auto).not.toHaveProperty("proxies");
   });
 
-  it("attaches use: only when a group explicitly opts in, and honors per-group opt-out", () => {
+  it("attaches use: only when a non-country group explicitly opts in, and honors per-group opt-out", () => {
     const groups = generateProxyGroups({
       nodes: [],
       proxyProviderNames: ["my_sub"],
@@ -165,7 +164,7 @@ describe("provider-mode local format", () => {
     expect(group).not.toHaveProperty("filter");
   });
 
-  it("leaves country groups without use: by default until they opt in", () => {
+  it("attaches use: to country groups by default", () => {
     const groups = generateProxyGroups({
       nodes: [],
       proxyProviderNames: ["my_sub"],
@@ -182,6 +181,36 @@ describe("provider-mode local format", () => {
           includeInGroupMembers: true,
           groupType: "url-test",
           advanced: { regions: ["hk"] },
+        },
+      ],
+    });
+
+    const hk = groups.find((group) => group.name === "🇭🇰 香港节点");
+    expect(hk).toMatchObject({
+      type: "url-test",
+      use: ["my_sub"],
+      filter: "(?i)港|hk|hongkong|hong kong",
+      tolerance: 50,
+    });
+  });
+
+  it("lets a country group opt out of use: with useProviders false", () => {
+    const groups = generateProxyGroups({
+      nodes: [],
+      proxyProviderNames: ["my_sub"],
+      enabledModules: ["select", "auto"],
+      ruleProviderBaseUrl: "https://rules.example.com",
+      testUrl: "https://www.gstatic.com/generate_204",
+      testInterval: 300,
+      customProxyGroups: [
+        {
+          id: "hk",
+          name: "🇭🇰 香港节点",
+          emoji: "",
+          memberSource: "filtered-nodes",
+          includeInGroupMembers: true,
+          groupType: "url-test",
+          advanced: { regions: ["hk"], useProviders: false },
         },
       ],
     });
@@ -219,7 +248,7 @@ describe("provider-mode local format", () => {
     });
   });
 
-  it("serializes provider-only groups without lazy: false or empty proxies", () => {
+  it("writes top-level empty proxies as proxies: [] and no empty proxies inside groups", () => {
     const groups = generateProxyGroups({
       nodes: [],
       proxyProviderNames: ["my_sub"],
@@ -236,7 +265,9 @@ describe("provider-mode local format", () => {
     });
 
     expect(yaml).not.toContain("lazy:");
-    expect(yaml).not.toContain("proxies: []");
+    // 顶层空 proxies 写成 proxies: []（文件开头），组内不出现空 proxies
+    expect(yaml.startsWith("proxies: []\n")).toBe(true);
+    expect(yaml.match(/proxies: \[\]/g)).toHaveLength(1);
     expect(yaml).toContain('filter: "(?i)港|hk|hongkong|hong kong"');
     expect(yaml).toContain("tolerance: 50");
   });

@@ -1,3 +1,17 @@
+# SubBoost v2.11.15
+
+## 中文
+
+- 国家分组现在按节点自动同步：每次订阅刷新或节点变化时，系统从节点名字里识别国家（共用同一份 57 国列表），有该国节点的分组自动启用，没有的自动禁用（分组保留在列表里、变灰显示“已禁用”，不生成进配置），节点里出现此前没有的国家时自动新建该国分组（表达式按国家名自动生成，可改）。手动删掉的国家分组，只要对应国家节点还在，下次同步会重新加回来；手动禁用的分组，下次节点变化时若该国仍有节点也会重新启用。节点名字里没有任何国家信息的节点不参与分组。
+- 国家分组现在默认挂 `use:`：国家分组的 `use:` 默认随订阅 provider 挂上（可在组的高级设置里选“从不挂 use:”退出），其他非国家分组仍默认不挂。
+- 生成的配置里，顶部空的 `proxies:` 现在明确写成 `proxies: []`。
+
+## English
+
+- Country groups now auto-sync with nodes: whenever a subscription refreshes or nodes change, the system detects countries from node names (one shared 57-country list), enables groups whose country has nodes, disables those without (the group stays in the list, dimmed with a "disabled" badge, and is not generated into the config), and auto-creates a country group (with an auto-generated, editable expression) for a node country that has none. A manually deleted country group is re-added on the next sync while its nodes exist; a manually disabled one is re-enabled on the next node change if its country still has nodes. Nodes whose names carry no country information join no group.
+- Country groups now attach `use:` by default: country groups attach `use:` to the subscription provider unless opted out in the group's advanced settings ("never attach use:"); other non-country groups still default to not attaching it.
+- The generated config now renders the empty top-level `proxies:` explicitly as `proxies: []`.
+
 # SubBoost v2.11.14
 
 ## 中文

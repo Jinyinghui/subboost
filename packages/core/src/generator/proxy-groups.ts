@@ -15,7 +15,7 @@ import type {
   ProxyGroupGroupType,
   RuleProvider,
 } from "@subboost/core/types/config";
-import { normalizeProxyGroupAdvancedConfig, resolveProviderFilterFields, resolveProxyGroupMembers } from "@subboost/core/proxy-group-advanced";
+import { normalizeProxyGroupAdvancedConfig, resolveCountryGroupRegion, resolveProviderFilterFields, resolveProxyGroupMembers } from "@subboost/core/proxy-group-advanced";
 import { isSubscriptionInfoNodeName } from "@subboost/core/subscription/info-node-name";
 import { isDisabledCustomProxyGroupTarget } from "@subboost/core/proxy-group-targets";
 
@@ -138,14 +138,20 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
   /**
    * 该组是否挂 use:（订阅 provider）。
    * - 每组高级配置可单独指定（useProviders：true 始终挂、false 从不挂）
-   * - 默认不挂：仅当 useProviders 明确为 true 时挂 use:。
+   * - 默认：非国家分组不挂，仅当 useProviders 明确为 true 时挂 use:；
+   *   能对应到国家列表的国家分组默认挂（useProviders 未设置即挂），只有明确选“从不挂”才不挂。
    *   注意：订阅模式下靠 provider 节点筛成员的组（如国家分组、自动选择）需要挂 use:
    *   才有成员和 filter:；不挂时生成的是空组，需在组卡片里单独选“始终挂 use:”。
    */
   const resolveUseForGroup = (
-    advanced: ProxyGroupAdvancedConfig | undefined
+    advanced: ProxyGroupAdvancedConfig | undefined,
+    isCountryGroup = false
   ): Record<string, unknown> => {
     const normalized = normalizeProxyGroupAdvancedConfig(advanced);
+    if (isCountryGroup) {
+      if (normalized.useProviders === false) return {};
+      return providerUse;
+    }
     if (normalized.useProviders !== true) return {};
     return providerUse;
   };
@@ -155,9 +161,10 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
    */
   const resolveExtraForGroup = (
     groupType: ProxyGroupGroupType,
-    advanced: ProxyGroupAdvancedConfig | undefined
+    advanced: ProxyGroupAdvancedConfig | undefined,
+    isCountryGroup = false
   ): Record<string, unknown> => {
-    const use = resolveUseForGroup(advanced);
+    const use = resolveUseForGroup(advanced, isCountryGroup);
     if (!("use" in use)) return use;
     if (groupType !== "url-test" && groupType !== "fallback" && groupType !== "load-balance") return use;
     return { ...use, ...resolveProviderFilterFields(advanced, hasProviders) };
@@ -395,7 +402,7 @@ export function generateProxyGroups(options: ProxyGroupGenerateOptions): ProxyGr
             id: customGroup.id,
             name: customGroup.name,
           });
-    const extra = resolveExtraForGroup(customGroup.groupType, customGroup.advanced);
+    const extra = resolveExtraForGroup(customGroup.groupType, customGroup.advanced, resolveCountryGroupRegion(customGroup) !== null);
     const tolerance = customGroup.advanced?.tolerance;
 
     if (usesFilteredNodeMembers(customGroup)) {

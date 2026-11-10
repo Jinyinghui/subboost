@@ -71,7 +71,7 @@ describe("configToYaml", () => {
       rules: [],
     } as unknown as ClashConfig);
 
-    expect(yaml).toBe(["proxies:", "", "proxy-groups:", "", "rule-providers:", "", "rules:"].join("\n"));
+    expect(yaml).toBe(["proxies: []", "", "proxy-groups:", "", "rule-providers:", "", "rules:"].join("\n"));
   });
 
   it("quotes rule scalars that YAML would otherwise truncate or reinterpret", () => {

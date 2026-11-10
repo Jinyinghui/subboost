@@ -108,7 +108,7 @@ export function CountryGroupsSection() {
           {countryGroups.length} 个
         </Badge>
         <div className="min-w-0 truncate text-[10px] text-fg-35">
-          按表达式筛选对应国家节点；表达式可直接改，新增国家按名字自动生成
+          按节点自动同步：有该国节点时启用，无节点时禁用；表达式可直接改，新增国家按名字自动生成
         </div>
       </div>
 
@@ -138,16 +138,23 @@ export function CountryGroupsSection() {
         <div className="py-2 text-center text-[11px] text-fg-40">暂无国家分组，可在上方添加</div>
       ) : (
         <div className="space-y-1">
-          {countryGroups.map((group) => (
+          {countryGroups.map((group) => {
+            const isEnabled = group.enabled !== false;
+            return (
             <div
               key={group.id}
-              className="grid min-w-0 grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-1.5"
+              className={`grid min-w-0 grid-cols-[minmax(0,10rem)_minmax(0,1fr)_auto] items-center gap-1.5${isEnabled ? "" : " opacity-50"}`}
             >
               <div
-                className="min-w-0 truncate text-xs text-fg-75"
+                className="flex min-w-0 items-center gap-1 text-xs text-fg-75"
                 title={group.name}
               >
-                {group.name}
+                <span className="min-w-0 truncate">{group.name}</span>
+                {!isEnabled && (
+                  <Badge variant="outline" className="shrink-0 border-ink/10 bg-ink/5 text-[10px] text-fg-45">
+                    已禁用
+                  </Badge>
+                )}
               </div>
               <Input
                 value={resolveCountryGroupExpression(group)}
@@ -175,7 +182,8 @@ export function CountryGroupsSection() {
                 <Trash2 className="h-3.5 w-3.5" />
               </Button>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

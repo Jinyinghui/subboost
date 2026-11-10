@@ -2,6 +2,7 @@ import type { ParsedNode } from "@subboost/core/types/node";
 import { formatNodeNameFromTemplate } from "@subboost/core/node-name-template";
 import type { ConfigActions } from "../definitions";
 import { makeUniqueName } from "../definitions";
+import { syncCountryGroupsWithNodes } from "../country-groups-sync";
 import type { GetState, SetAndGenerateConfig, SetState } from "../store-types";
 
 type NodeActions = Pick<
@@ -25,7 +26,8 @@ export function createNodeActions(
 ): NodeActions {
   return {
     clearNodes: () => {
-      set({
+      // 直接 set（不走 setAndGenerateConfig）：节点清空后国家分组也随之全部禁用。
+      set((state) => ({
         nodes: [],
         deletedNodeNames: [],
         deletedNodes: [],
@@ -33,7 +35,8 @@ export function createNodeActions(
         generatedYaml: "",
         generatedYamlError: null,
         listenerPorts: {},
-      });
+        customProxyGroups: syncCountryGroupsWithNodes(state.customProxyGroups, []),
+      }));
     },
 
     removeNode: (name: string) => {

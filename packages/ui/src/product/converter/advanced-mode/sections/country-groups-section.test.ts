@@ -214,15 +214,15 @@ describe("CountryGroupsSection", () => {
     );
 
     vi.clearAllMocks();
-    addInput?.props.onChange({ target: { value: "越南" } });
+    addInput?.props.onChange({ target: { value: "毛里求斯" } });
     elements = flattenElements(CountryGroupsSection());
     elements
       .find((element) => element.type === "button" && element.props.title === "添加国家")
       ?.props.onClick();
     expect(mocks.store.addCustomProxyGroup).toHaveBeenCalledWith(
       expect.objectContaining({
-        name: "越南节点",
-        advanced: { includeRegex: "(?i)越南" },
+        name: "毛里求斯节点",
+        advanced: { includeRegex: "(?i)毛里求斯" },
       }),
     );
     expect(addButton).toBeDefined();
@@ -301,12 +301,12 @@ describe("CountryGroupsSection", () => {
       .find((element) => element.type === "input" && element.props.placeholder?.includes("国家名称"))
       ?.props.onKeyDown({ key: "Enter" });
     expect(mocks.store.addCustomProxyGroup).toHaveBeenCalledWith(
-      expect.objectContaining({ name: "越南节点" }),
+      expect.objectContaining({ name: "🇻🇳 越南节点" }),
     );
   });
 
   it("counts dialer group names when checking duplicates", () => {
-    mocks.store.dialerProxyGroups = [null, { name: "  " }, { name: "越南节点" }];
+    mocks.store.dialerProxyGroups = [null, { name: "  " }, { name: "🇻🇳 越南节点" }];
     const elements = flattenElements(CountryGroupsSection());
     const addInput = elements.find(
       (element) => element.type === "input" && element.props.placeholder?.includes("国家名称"),
@@ -320,6 +320,25 @@ describe("CountryGroupsSection", () => {
       expect.objectContaining({ title: expect.stringContaining("已存在") }),
     );
     expect(mocks.store.addCustomProxyGroup).not.toHaveBeenCalled();
+  });
+
+  it("dims disabled country groups and shows a disabled badge", () => {
+    mocks.store.customProxyGroups = [
+      countryGroup({}),
+      countryGroup({ id: "us", name: "🇺🇲 美国节点", advanced: { regions: ["us"] }, enabled: false }),
+    ];
+    const elements = flattenElements(CountryGroupsSection());
+    const badge = elements.find(
+      (element) => element.type === "span" && element.props.children === "已禁用",
+    );
+    expect(badge).toBeDefined();
+    const dimmedRow = elements.find(
+      (element) =>
+        element.type === "div" &&
+        typeof element.props.className === "string" &&
+        element.props.className.includes("opacity-50"),
+    );
+    expect(dimmedRow).toBeDefined();
   });
 
   it("shows an empty state when there are no country groups", () => {

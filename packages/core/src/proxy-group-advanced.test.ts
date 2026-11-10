@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  detectNodeCountries,
+  compileCountryFilterRegex,
+  matchRegionForCountryName,
   normalizeProxyGroupAdvancedConfig,
   normalizeProxyGroupMemberRef,
   resolveProxyGroupMembers,
@@ -424,5 +427,48 @@ describe("resolveProxyGroupMembers", () => {
       "reject:REJECT",
     ]);
     expect(result.excluded.map((member) => member.key)).toEqual(["direct:DIRECT"]);
+  });
+});
+
+describe("detectNodeCountries", () => {
+  it("tolerates non-string names when matching a country", () => {
+    expect(matchRegionForCountryName(42 as unknown as string)).toBe(null);
+    expect(matchRegionForCountryName(undefined as unknown as string)).toBe(null);
+  });
+
+  it("compiles country filters defensively", () => {
+    expect(compileCountryFilterRegex(undefined)).toBe(null);
+    expect(compileCountryFilterRegex("")).toBe(null);
+    expect(compileCountryFilterRegex("(?i)")).toBe(null);
+    expect(compileCountryFilterRegex("(?i)港|hk")).toBeInstanceOf(RegExp);
+  });
+
+  it("detects the countries present in node names", () => {
+    expect(detectNodeCountries(["香港-01", "日本-02", "美国-03"])).toEqual(
+      new Set(["hk", "jp", "us"]),
+    );
+  });
+
+  it("matches filter spellings without spaces and city keywords", () => {
+    expect(detectNodeCountries(["hongkong-01", "洛杉矶-01", "狮城-01"])).toEqual(
+      new Set(["hk", "us", "sg"]),
+    );
+  });
+
+  it("detects countries outside the 12 presets", () => {
+    expect(detectNodeCountries(["印度-01", "India-Mumbai-01", "泰国-01", "TH-Bangkok-01"])).toEqual(
+      new Set(["in", "th"]),
+    );
+  });
+
+  it("ignores nodes without any country information", () => {
+    expect(detectNodeCountries(["Hello-01", "套餐信息", "", "  "])).toEqual(new Set());
+    expect(detectNodeCountries([])).toEqual(new Set());
+  });
+
+  it("matches case-insensitively", () => {
+    expect(detectNodeCountries(["us-01", "US-Los Angeles", "TW-台北-01"])).toEqual(
+      new Set(["us", "tw"]),
+    );
   });
 });

@@ -3,7 +3,9 @@ import {
   buildRegionFilterRegex,
   escapeRegexLiteral,
   isCountryProxyGroup,
+  matchRegionForCountryName,
   normalizeProxyGroupAdvancedConfig,
+  resolveCountryGroupRegion,
 } from "@subboost/core/proxy-group-advanced";
 import type {
   CustomProxyGroup,
@@ -13,6 +15,7 @@ import type {
 import { DEFAULT_COUNTRY_PROXY_GROUPS } from "@subboost/ui/store/config-store/definitions";
 
 export { isCountryProxyGroup } from "@subboost/core/proxy-group-advanced";
+export { matchRegionForCountryName, resolveCountryGroupRegion } from "@subboost/core/proxy-group-advanced";
 
 /** 该国家组当前生效的表达式：自定义表达式优先，否则由地区派生。 */
 export function resolveCountryGroupExpression(group: CustomProxyGroup): string {
@@ -44,24 +47,37 @@ function stripCountryNameSuffix(value: string): string {
 }
 
 /**
- * 按用户填的国家名称匹配已知地区：先精确匹配 label（如“英国”），
- * 再匹配 keywords（如“UK”“France”“伦敦”，拉丁字母不区分大小写）。
- * “other”没有 keywords，不参与匹配。
+ * 按国家 id 生成分组草稿（不含 id，由调用方按地区 id 落定）。
+ * 预置的 12 国沿用预置分组名与容差；其余国家用地区预设的国旗与中文名。
  */
-export function matchRegionForCountryName(name: string): NodeRegion | null {
-  const stripped = stripCountryNameSuffix(name);
-  if (!stripped) return null;
-  const byLabel = REGION_PRESETS.find((preset) => preset.label === stripped);
-  if (byLabel) return byLabel.id;
-  const lowered = stripped.toLowerCase();
-  const byKeyword = REGION_PRESETS.find(
-    (preset) =>
-      preset.id !== "other" &&
-      preset.keywords.some((keyword) => keyword.toLowerCase() === lowered),
+export function buildCountryGroupDraftForRegion(
+  regionId: NodeRegion,
+): Omit<CustomProxyGroup, "id"> | null {
+  if (regionId === "other") return null;
+  const preset = DEFAULT_COUNTRY_PROXY_GROUPS.find(
+    (item) => normalizeProxyGroupAdvancedConfig(item.advanced).regions?.includes(regionId),
   );
-  return byKeyword ? byKeyword.id : null;
+  if (preset) {
+    return {
+      name: preset.name,
+      emoji: "",
+      memberSource: "filtered-nodes",
+      includeInGroupMembers: true,
+      groupType: "url-test",
+      advanced: { ...normalizeProxyGroupAdvancedConfig(preset.advanced) },
+    };
+  }
+  const fallback = REGION_PRESETS.find((item) => item.id === regionId);
+  if (!fallback) return null;
+  return {
+    name: `${fallback.emoji} ${fallback.label}节点`,
+    emoji: "",
+    memberSource: "filtered-nodes",
+    includeInGroupMembers: true,
+    groupType: "url-test",
+    advanced: { regions: [regionId] },
+  };
 }
-
 /**
  * 新增国家时生成分组草稿（不含 id，由 store 生成）。
  * - 能对上已知地区：用该地区的预设名与 regions，表达式由地区派生

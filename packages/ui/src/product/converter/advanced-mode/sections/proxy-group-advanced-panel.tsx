@@ -559,7 +559,7 @@ export function ProxyGroupAdvancedPanel({
               className="min-h-0 rounded px-2 py-1 text-[10px]"
             />
           </ChoiceGroup>
-          <div className="mt-1 text-[10px] text-fg-35">默认不挂 use:（如需某组挂，选“始终挂 use:”）</div>
+          <div className="mt-1 text-[10px] text-fg-35">默认不挂 use:（国家分组默认挂；如需某组挂，选“始终挂 use:”，不挂选“从不挂 use:”）</div>
         </div>
         {effectiveGroupType === "url-test" ? (
           <div>

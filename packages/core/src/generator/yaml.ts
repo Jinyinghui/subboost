@@ -349,13 +349,15 @@ export function configToYaml(config: ClashConfig): string {
     lines.push("");
   }
 
-  // === 代理节点（每个节点一行内联）===
-  lines.push("proxies:");
+  // === 代理节点（每个节点一行内联；无节点时写 proxies: []，不要留空值 proxies:）===
   if (config.proxies && config.proxies.length > 0) {
+    lines.push("proxies:");
     for (const proxy of config.proxies) {
       const orderedProxy = canonicalizeProxy(proxy as unknown as Record<string, unknown>);
       lines.push(`  - ${toInlineYaml(orderedProxy)}`);
     }
+  } else {
+    lines.push("proxies: []");
   }
   lines.push("");
 

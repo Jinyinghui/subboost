@@ -33,6 +33,59 @@ export const REGION_PRESETS: Array<{
   { id: "ca", label: "加拿大", emoji: "🇨🇦", keywords: ["加拿大", "CA", "Canada", "Toronto", "多伦多"], filter: "(?i)加|ca|canada" },
   { id: "nl", label: "荷兰", emoji: "🇳🇱", keywords: ["荷兰", "NL", "Netherlands"], filter: "(?i)荷|nl|netherlands" },
   { id: "au", label: "澳大利亚", emoji: "🇦🇺", keywords: ["澳大利亚", "AU", "Australia", "Sydney", "悉尼"], filter: "(?i)澳|au|australia" },
+  // 以下为节点同步用的扩展国家：与上面 12 个预置共用同一份国家列表（系统内只一份）。
+  // filter 沿用本地配置原文风格；个别两位代码因是其他国家/城市名的子串而不在 filter 与
+  // keywords 里出现（如印度不用 in，因它是 Indonesia/Singapore 的子串；冰岛不用 is，
+  // 因它是 Paris/Lisbon 的子串；瑞士不用 ch，因它是 China/Chile 的子串），改由中文名、
+  // 英文名与城市名识别，避免误判。
+  { id: "in", label: "印度", emoji: "🇮🇳", keywords: ["印度", "India", "孟买"], filter: "(?i)印度|india" },
+  { id: "th", label: "泰国", emoji: "🇹🇭", keywords: ["泰国", "TH", "Thailand", "曼谷"], filter: "(?i)泰|th|thailand" },
+  { id: "vn", label: "越南", emoji: "🇻🇳", keywords: ["越南", "VN", "Vietnam", "胡志明"], filter: "(?i)越|vn|vietnam" },
+  { id: "id", label: "印度尼西亚", emoji: "🇮🇩", keywords: ["印度尼西亚", "印尼", "Indonesia", "雅加达"], filter: "(?i)印尼|indonesia" },
+  { id: "my", label: "马来西亚", emoji: "🇲🇾", keywords: ["马来西亚", "MY", "Malaysia", "吉隆坡"], filter: "(?i)马来西亚|my|malaysia" },
+  { id: "ph", label: "菲律宾", emoji: "🇵🇭", keywords: ["菲律宾", "PH", "Philippines", "马尼拉"], filter: "(?i)菲律宾|ph|philippines" },
+  { id: "ru", label: "俄罗斯", emoji: "🇷🇺", keywords: ["俄罗斯", "Russia", "莫斯科"], filter: "(?i)俄罗斯|russia" },
+  { id: "tr", label: "土耳其", emoji: "🇹🇷", keywords: ["土耳其", "Turkey", "伊斯坦布尔"], filter: "(?i)土耳其|turkey" },
+  { id: "br", label: "巴西", emoji: "🇧🇷", keywords: ["巴西", "Brazil", "圣保罗"], filter: "(?i)巴西|brazil" },
+  { id: "ar", label: "阿根廷", emoji: "🇦🇷", keywords: ["阿根廷", "Argentina", "布宜诺斯艾利斯"], filter: "(?i)阿根廷|argentina" },
+  { id: "mx", label: "墨西哥", emoji: "🇲🇽", keywords: ["墨西哥", "MX", "Mexico"], filter: "(?i)墨西哥|mx|mexico" },
+  { id: "cl", label: "智利", emoji: "🇨🇱", keywords: ["智利", "CL", "Chile"], filter: "(?i)智利|cl|chile" },
+  { id: "pe", label: "秘鲁", emoji: "🇵🇪", keywords: ["秘鲁", "PE", "Peru"], filter: "(?i)秘鲁|pe|peru" },
+  { id: "co", label: "哥伦比亚", emoji: "🇨🇴", keywords: ["哥伦比亚", "CO", "Colombia"], filter: "(?i)哥伦比亚|co|colombia" },
+  { id: "za", label: "南非", emoji: "🇿🇦", keywords: ["南非", "ZA", "South Africa"], filter: "(?i)南非|za|south africa" },
+  { id: "eg", label: "埃及", emoji: "🇪🇬", keywords: ["埃及", "EG", "Egypt", "开罗"], filter: "(?i)埃及|eg|egypt" },
+  { id: "ng", label: "尼日利亚", emoji: "🇳🇬", keywords: ["尼日利亚", "Nigeria"], filter: "(?i)尼日利亚|nigeria" },
+  { id: "ke", label: "肯尼亚", emoji: "🇰🇪", keywords: ["肯尼亚", "KE", "Kenya"], filter: "(?i)肯尼亚|ke|kenya" },
+  { id: "ae", label: "阿联酋", emoji: "🇦🇪", keywords: ["阿联酋", "AE", "UAE", "United Arab Emirates", "迪拜"], filter: "(?i)阿联酋|ae|uae|united arab emirates" },
+  { id: "sa", label: "沙特阿拉伯", emoji: "🇸🇦", keywords: ["沙特阿拉伯", "沙特", "Saudi Arabia", "利雅得"], filter: "(?i)沙特|saudi arabia" },
+  { id: "il", label: "以色列", emoji: "🇮🇱", keywords: ["以色列", "Israel"], filter: "(?i)以色列|israel" },
+  { id: "ua", label: "乌克兰", emoji: "🇺🇦", keywords: ["乌克兰", "UA", "Ukraine", "基辅"], filter: "(?i)乌克兰|ua|ukraine" },
+  { id: "pl", label: "波兰", emoji: "🇵🇱", keywords: ["波兰", "PL", "Poland", "华沙"], filter: "(?i)波兰|pl|poland" },
+  { id: "es", label: "西班牙", emoji: "🇪🇸", keywords: ["西班牙", "Spain", "马德里"], filter: "(?i)西班牙|spain" },
+  { id: "it", label: "意大利", emoji: "🇮🇹", keywords: ["意大利", "IT", "Italy", "罗马"], filter: "(?i)意大利|it|italy" },
+  { id: "se", label: "瑞典", emoji: "🇸🇪", keywords: ["瑞典", "Sweden"], filter: "(?i)瑞典|sweden" },
+  { id: "no", label: "挪威", emoji: "🇳🇴", keywords: ["挪威", "NO", "Norway"], filter: "(?i)挪威|no|norway" },
+  { id: "fi", label: "芬兰", emoji: "🇫🇮", keywords: ["芬兰", "FI", "Finland"], filter: "(?i)芬兰|fi|finland" },
+  { id: "dk", label: "丹麦", emoji: "🇩🇰", keywords: ["丹麦", "DK", "Denmark"], filter: "(?i)丹麦|dk|denmark" },
+  { id: "ch", label: "瑞士", emoji: "🇨🇭", keywords: ["瑞士", "Switzerland", "苏黎世", "日内瓦"], filter: "(?i)瑞士|switzerland" },
+  { id: "at", label: "奥地利", emoji: "🇦🇹", keywords: ["奥地利", "AT", "Austria", "维也纳"], filter: "(?i)奥地利|at|austria" },
+  { id: "be", label: "比利时", emoji: "🇧🇪", keywords: ["比利时", "Belgium", "布鲁塞尔"], filter: "(?i)比利时|belgium" },
+  { id: "ie", label: "爱尔兰", emoji: "🇮🇪", keywords: ["爱尔兰", "IE", "Ireland"], filter: "(?i)爱尔兰|ie|ireland" },
+  { id: "pt", label: "葡萄牙", emoji: "🇵🇹", keywords: ["葡萄牙", "Portugal", "里斯本"], filter: "(?i)葡萄牙|portugal" },
+  { id: "gr", label: "希腊", emoji: "🇬🇷", keywords: ["希腊", "GR", "Greece"], filter: "(?i)希腊|gr|greece" },
+  { id: "nz", label: "新西兰", emoji: "🇳🇿", keywords: ["新西兰", "NZ", "New Zealand"], filter: "(?i)新西兰|nz|new zealand" },
+  { id: "is", label: "冰岛", emoji: "🇮🇸", keywords: ["冰岛", "Iceland", "雷克雅未克"], filter: "(?i)冰岛|iceland" },
+  { id: "cz", label: "捷克", emoji: "🇨🇿", keywords: ["捷克", "CZ", "Czech"], filter: "(?i)捷克|cz|czech" },
+  { id: "hu", label: "匈牙利", emoji: "🇭🇺", keywords: ["匈牙利", "HU", "Hungary"], filter: "(?i)匈牙利|hu|hungary" },
+  { id: "ro", label: "罗马尼亚", emoji: "🇷🇴", keywords: ["罗马尼亚", "Romania"], filter: "(?i)罗马尼亚|romania" },
+  { id: "pk", label: "巴基斯坦", emoji: "🇵🇰", keywords: ["巴基斯坦", "PK", "Pakistan"], filter: "(?i)巴基斯坦|pk|pakistan" },
+  { id: "bd", label: "孟加拉", emoji: "🇧🇩", keywords: ["孟加拉", "BD", "Bangladesh"], filter: "(?i)孟加拉|bd|bangladesh" },
+  { id: "lk", label: "斯里兰卡", emoji: "🇱🇰", keywords: ["斯里兰卡", "LK", "Sri Lanka"], filter: "(?i)斯里兰卡|lk|sri lanka" },
+  { id: "kh", label: "柬埔寨", emoji: "🇰🇭", keywords: ["柬埔寨", "KH", "Cambodia"], filter: "(?i)柬埔寨|kh|cambodia" },
+  { id: "la", label: "老挝", emoji: "🇱🇦", keywords: ["老挝", "Laos"], filter: "(?i)老挝|laos" },
+  { id: "mm", label: "缅甸", emoji: "🇲🇲", keywords: ["缅甸", "MM", "Myanmar"], filter: "(?i)缅甸|mm|myanmar" },
+  { id: "mn", label: "蒙古", emoji: "🇲🇳", keywords: ["蒙古", "MN", "Mongolia"], filter: "(?i)蒙古|mn|mongolia" },
+  { id: "kz", label: "哈萨克斯坦", emoji: "🇰🇿", keywords: ["哈萨克斯坦", "KZ", "Kazakhstan"], filter: "(?i)哈萨克斯坦|kz|kazakhstan" },
   { id: "other", label: "其他", emoji: "🌐", keywords: [] },
 ];
 
@@ -93,6 +146,97 @@ function matchesRegion(nodeName: string, regions: NodeRegion[]): boolean {
   }
 
   return false;
+}
+
+/** 把一条 filter 正则编译成 JS 可用的正则：去掉 (?i) 前缀后按不区分大小写编译，失败返回 null。 */
+export function compileCountryFilterRegex(filter: string | undefined): RegExp | null {
+  const raw = typeof filter === "string" ? filter.trim() : "";
+  if (!raw) return null;
+  const body = raw.replace(/^\(\?i\)/, "");
+  if (!body) return null;
+  try {
+    return new RegExp(body, "i");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 识别一批节点名里实际有哪些国家：某国只要有一个节点命中即算存在。
+ * 命中条件与分组的成员筛选一致：关键词子串（含城市名）或该国的 filter 正则。
+ * 没有任何国家信息的节点不属于任何国家，不参与结果。
+ */
+export function detectNodeCountries(nodeNames: string[]): Set<NodeRegion> {
+  const present = new Set<NodeRegion>();
+  const compiled = REGION_PRESETS.filter((preset) => preset.id !== "other").map((preset) => ({
+    id: preset.id,
+    keywords: preset.keywords.map((keyword) => keyword.toLowerCase()),
+    filterRe: compileCountryFilterRegex(preset.filter),
+  }));
+  for (const name of nodeNames) {
+    if (typeof name !== "string" || !name.trim()) continue;
+    const normalized = name.toLowerCase();
+    for (const country of compiled) {
+      if (present.has(country.id)) continue;
+      if (country.keywords.some((keyword) => keyword && normalized.includes(keyword))) {
+        present.add(country.id);
+        continue;
+      }
+      if (country.filterRe && country.filterRe.test(name)) present.add(country.id);
+    }
+  }
+  return present;
+}
+
+function stripCountryNameSuffix(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.endsWith("节点")) return trimmed.slice(0, -2).trim();
+  return trimmed;
+}
+
+/**
+ * 按用户填的国家名称匹配已知地区：先精确匹配 label（如“英国”），
+ * 再匹配 keywords（如“UK”“France”“伦敦”，拉丁字母不区分大小写）。
+ * “other”没有 keywords，不参与匹配。
+ */
+export function matchRegionForCountryName(name: string): NodeRegion | null {
+  if (typeof name !== "string") return null;
+  const stripped = stripCountryNameSuffix(name);
+  if (!stripped) return null;
+  const byLabel = REGION_PRESETS.find((preset) => preset.label === stripped);
+  if (byLabel) return byLabel.id;
+  const lowered = stripped.toLowerCase();
+  const byKeyword = REGION_PRESETS.find(
+    (preset) =>
+      preset.id !== "other" &&
+      preset.keywords.some((keyword) => keyword.toLowerCase() === lowered),
+  );
+  return byKeyword ? byKeyword.id : null;
+}
+
+/**
+ * 反查一个分组对应的国家：先看 regions，再按名字匹配，
+ * 最后按自定义表达式与地区派生 filter 比对。都对不上返回 null。
+ * 用来判定“这是不是一个能对应到国家列表的国家分组”（比如默认挂 use:、自动同步），
+ * 与 isCountryProxyGroup 的宽松判定（url-test 且有 regions/includeRegex）不同。
+ */
+export function resolveCountryGroupRegion(group: CustomProxyGroup): NodeRegion | null {
+  const advanced = normalizeProxyGroupAdvancedConfig(group.advanced);
+  const regions = advanced.regions ?? [];
+  if (regions.length > 0 && regions[0] !== "other") return regions[0];
+  const byName = matchRegionForCountryName(group.name);
+  if (byName) return byName;
+  const expression = advanced.includeRegex?.trim();
+  if (expression) {
+    const stripped = expression.replace(/^\(\?i\)/, "");
+    const byExpression = REGION_PRESETS.find((preset) => {
+      if (preset.id === "other") return false;
+      const derived = buildRegionFilterRegex([preset.id]);
+      return derived !== undefined && derived.replace(/^\(\?i\)/, "") === stripped;
+    });
+    if (byExpression) return byExpression.id;
+  }
+  return null;
 }
 
 export function escapeRegexLiteral(value: string): string {
