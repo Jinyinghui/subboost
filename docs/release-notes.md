@@ -1,3 +1,15 @@
+# SubBoost v2.11.14
+
+## 中文
+
+- 网页端更新不再“假成功”：之前发布清单下载失败时，更新器会静默退回“只重拉当前镜像”，退出码仍为 0，网页于是显示更新完成、版本却一动没动。现在清单地址已配置但下载失败时，更新直接报错退出，网页端会显示失败原因和日志，不会再误报成功。没有配置清单地址时仍保留原来的只更新当前镜像行为。
+- 设置页系统更新卡片的成功提示不再写死：更新成功后只有在确实没有新版本时才显示“当前已是最新版本”，如果仍有新版本，会显示“仍有新版本 vX 可更新”。
+
+## English
+
+- Website updates no longer report a false success: when the release manifest download failed, the updater used to silently fall back to re-pulling the current image and exit 0, so the website showed the update as complete while the version never moved. Now, when a release URL is configured but the manifest cannot be downloaded, the update fails loudly and the website shows the failure reason and log tail instead of a false success. When no release URL is configured, the previous current-image-only behavior is kept.
+- The success message on the settings update card is no longer hardcoded: after a successful update it only says "already the latest version" when there genuinely is no newer version; if a newer version is still available, it says a newer version vX is still available for update.
+
 # SubBoost v2.11.13
 
 ## 中文

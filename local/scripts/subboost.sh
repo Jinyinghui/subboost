@@ -549,7 +549,10 @@ update_cmd() {
     say "Detected old fixed release update source; switching updates to stable latest."
     release_url="$DEFAULT_STABLE_RELEASE_URL"
   fi
-  if [ -n "$release_url" ] && download_to_temp "$release_url" "$release_file"; then
+  if [ -n "$release_url" ]; then
+    # 清单地址已配置：下载失败就是一次失败的更新，直接报错退出；
+    # 不要静默退回“只重拉当前镜像”——那会让网页端显示更新完成，版本却一动没动。
+    download_to_temp "$release_url" "$release_file" || die "Release manifest unavailable; update aborted."
     image="$(json_get image "$release_file" || true)"
     compose_url="$(resolve_url "$release_url" "$(json_get composeUrl "$release_file" || true)")"
     manager_url="$(resolve_url "$release_url" "$(json_get managerUrl "$release_file" || true)")"

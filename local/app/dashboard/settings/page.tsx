@@ -319,7 +319,12 @@ export default function SettingsPage() {
                 {updatePollErrors > 0 && "（服务重启中）"}
               </p>
             ) : updateInfo?.status.state === "succeeded" ? (
-              <p className="text-xs text-emerald-300">更新完成，当前已是最新版本。</p>
+              <p className="text-xs text-emerald-300">
+                更新完成
+                {updateInfo?.hasUpdate && updateInfo.latestVersion
+                  ? `，仍有新版本 v${updateInfo.latestVersion} 可更新。`
+                  : "，当前已是最新版本。"}
+              </p>
             ) : updateInfo?.status.state === "failed" ? (
               <div className="space-y-2">
                 <p className="text-xs text-red-300">{updateInfo.status.message || "更新失败"}</p>

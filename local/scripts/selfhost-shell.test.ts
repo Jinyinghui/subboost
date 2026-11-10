@@ -577,6 +577,132 @@ ENV
     expect(candidateStartIndex).toBeGreaterThan(dumpIndex);
   }, 10_000);
 
+  it("fails the update instead of silently re-pulling the current image when the manifest download fails", () => {
+    const script = `
+      set -Eeuo pipefail
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      mkdir -p "$home/bin"
+      cat > "$home/.env" <<ENV
+SUBBOOST_RELEASE_URL=file://$home/release/missing.json
+SUBBOOST_IMAGE=old-image
+POSTGRES_DB=subboost
+POSTGRES_USER=subboost
+POSTGRES_PASSWORD=test-password
+DATABASE_URL=postgres://subboost:test-password@127.0.0.1:5432/subboost
+ENCRYPTION_KEY=key
+JWT_SECRET=test-jwt-secret
+CRON_SECRET=test-cron-secret
+APP_URL=http://127.0.0.1:31000
+SUBBOOST_PORT=31000
+ENV
+      : > "$home/docker-compose.yml"
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      export SUBBOOST_HOME="$home"
+      export SUBBOOST_BIN="$home/bin/subboost"
+      source local/scripts/subboost.sh
+      sudo_do() { "$@"; }
+      docker_log="$home/docker-log"
+      : > "$docker_log"
+      docker() {
+        printf 'command=%s\\n' "$*" >> "$docker_log"
+        return 0
+      }
+      update_status=0
+      ( update_cmd ) || update_status=$?
+      cat "$docker_log"
+      cat "$home/.env"
+      printf 'update_status=%s\n' "$update_status"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.stdout).toContain("update_status=1");
+    expect(result.stderr).toContain("Release manifest unavailable; update aborted.");
+    expect(result.stdout).not.toContain("pull_image=");
+    expect(result.stdout).toContain("SUBBOOST_IMAGE=old-image");
+  }, 10_000);
+
+  it("still updates the current image when no release URL is configured", () => {
+    const script = `
+      set -Eeuo pipefail
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      mkdir -p "$home/bin"
+      cat > "$home/.env" <<ENV
+SUBBOOST_IMAGE=old-image
+SUBBOOST_CANDIDATE_IMAGE=old-candidate-image
+POSTGRES_DB=subboost
+POSTGRES_USER=subboost
+POSTGRES_PASSWORD=test-password
+DATABASE_URL=postgres://subboost:test-password@127.0.0.1:5432/subboost
+ENCRYPTION_KEY=key
+JWT_SECRET=test-jwt-secret
+CRON_SECRET=test-cron-secret
+APP_URL=http://127.0.0.1:31000
+SUBBOOST_PORT=31000
+ENV
+      : > "$home/docker-compose.yml"
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      export SUBBOOST_HOME="$home"
+      export SUBBOOST_BIN="$home/bin/subboost"
+      export SUBBOOST_DOCTOR_HEALTH_ATTEMPTS=1
+      export SUBBOOST_DOCTOR_HEALTH_INTERVAL_SECONDS=0
+      source local/scripts/subboost.sh
+      sudo_do() { "$@"; }
+      install_secret_file() { cp "$1" "$2"; }
+      read_env_file() { cat "$ENV_FILE"; }
+      docker_log="$home/docker-log"
+      : > "$docker_log"
+      docker() {
+        printf 'command=%s\\n' "$*" >> "$docker_log"
+        if [ "$1" = "info" ]; then return 0; fi
+        if [ "$1" = "compose" ]; then
+          case "$*" in
+            *\"candidate-compose.yml\"*)
+              printf 'candidate_image=%s candidate_release_image=%s command=%s\\n' "\${SUBBOOST_IMAGE:-}" "\${SUBBOOST_CANDIDATE_IMAGE:-}" "$*" >> "$docker_log"
+              ;;
+          esac
+          case "$*" in
+            "compose version"*) return 0 ;;
+            *" config --services") printf 'app\\ndb\\ncron\\n'; return 0 ;;
+            *" config") return 0 ;;
+            *" pull")
+              printf 'pull_image=%s\\n' "\${SUBBOOST_IMAGE:-}" >> "$docker_log"
+              return 0
+              ;;
+            *"pg_dump -Fc"*) printf 'custom-dump'; return 0 ;;
+            *"pg_restore --list"*) cat >/dev/null; return 0 ;;
+            *" up -d --remove-orphans") return 0 ;;
+            *" up -d --no-deps --force-recreate app") return 0 ;;
+            *" ps -q app") printf 'app-id\\n'; return 0 ;;
+            *" ps -q db") printf 'db-id\\n'; return 0 ;;
+            *" ps -q cron") printf 'cron-id\\n'; return 0 ;;
+          esac
+        fi
+        if [ "$1" = "inspect" ]; then
+          case "$*" in
+            *"{{.Image}}"*) printf 'sha256:old-image\\n'; return 0 ;;
+            *".State.Status"*) printf 'running\\n'; return 0 ;;
+            *".State.Health"*) printf 'healthy\\n'; return 0 ;;
+          esac
+        fi
+        return 0
+      }
+      curl() { return 0; }
+      update_cmd
+      cat "$docker_log"
+      cat "$home/.env"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("updating current image and compose only");
+    expect(result.stdout).toContain("pull_image=old-image");
+    expect(result.stdout).toContain("SUBBOOST_IMAGE=old-image");
+  }, 10_000);
+
   it("migrates old fixed official update sources to stable latest", () => {
     const script = `
       set -Eeuo pipefail
