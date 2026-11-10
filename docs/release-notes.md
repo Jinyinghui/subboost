@@ -1,3 +1,15 @@
+# SubBoost v2.11.16
+
+## 中文
+
+- 修复订阅链接填入后国家分组没有反应的问题：之前订阅链接默认走 proxy-providers 模式，站点从不拉取订阅内容，store 里没有任何节点，2.11.15 的自动同步也就永远触发不了。现在填入订阅链接后会做一次尽力预解析（停下输入 800ms 后触发，手动点“导入”也会触发）：只识别订阅里节点的国家，不把节点存入 store、不影响生成配置；识别出的国家参与国家分组同步——有该国节点的分组启用、没有的禁用、没有的国家自动新建分组。预解析失败（如订阅拉不到）不影响导入本身，该订阅只不参与国家同步。
+- 批量导入（生成配置时）同样会对 provider 模式订阅做预解析识别国家。
+
+## English
+
+- Fixed country groups not reacting when a subscription link is entered: subscription links default to proxy-providers mode, in which the site never fetched the subscription content, so the store had no nodes and the v2.11.15 auto-sync could never trigger. Now, entering a subscription link triggers a best-effort pre-parse (800ms after typing stops, or when Import is clicked): it only detects the countries of the subscription's nodes, without storing nodes or affecting the generated config; the detected countries take part in country-group sync — groups with nodes enable, those without disable, and missing countries get a group auto-created. A failed pre-parse (e.g. the subscription cannot be fetched) does not affect the import itself; that subscription simply does not take part in country sync.
+- Batch import (when generating a config) now also pre-parses provider-mode subscriptions to detect countries.
+
 # SubBoost v2.11.15
 
 ## 中文

@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveNodeNameFilter } from "@subboost/core/subscription/node-name-filter";
 import type { ParsedNode } from "@subboost/core/types/node";
 import type { SubscriptionSource } from "./definitions";
@@ -29,7 +29,15 @@ function deferred<T>() {
 }
 
 describe("createSourceActions parseMultipleSources", () => {
-  beforeEach(resetSourceActionMocks);
+  // 预解析防抖用 setTimeout：fake 掉它，避免一个测试里排队的预解析在后面的测试里触发、
+  // 污染共享 mock 的调用计数。只 fake 计时器，Date 等保持真实。
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    resetSourceActionMocks();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it("parses multiple mixed sources and records per-source metadata", async () => {
     mocks.fetchUrlContentInBrowser
@@ -37,6 +45,11 @@ describe("createSourceActions parseMultipleSources", () => {
         content: "url content",
         headers: {},
         parseResult: parseResult([node("Remote")]),
+      })
+      .mockResolvedValueOnce({
+        content: "",
+        headers: {},
+        parseResult: parseResult([]),
       })
       .mockRejectedValueOnce(new Error("fetch failed"));
     mocks.parseSubscription.mockReturnValueOnce(parseResult([node("Yaml")], ["yaml warning"]));
@@ -78,6 +91,7 @@ describe("createSourceActions parseMultipleSources", () => {
     });
     expect(getState().sources.find((item: SubscriptionSource) => item.id === "url-provider")).toMatchObject({
       parsed: true,
+      detectedCountries: [],
       lastParsedContent: "https://example.com/provider",
     });
     expect(getState().sources.find((item: SubscriptionSource) => item.id === "url-fail")).toMatchObject({
@@ -87,12 +101,18 @@ describe("createSourceActions parseMultipleSources", () => {
   });
 
   it("parses provider metadata defaults and expire-only userinfo during multi-source imports", async () => {
-    mocks.fetchUrlContentInBrowser.mockResolvedValueOnce({
-      content: "ss://remote",
-      headers: {
-        "subscription-userinfo": "expire=1893456000",
-      },
-    });
+    mocks.fetchUrlContentInBrowser
+      .mockResolvedValueOnce({
+        content: "",
+        headers: {},
+        parseResult: parseResult([node("香港-01")]),
+      })
+      .mockResolvedValueOnce({
+        content: "ss://remote",
+        headers: {
+          "subscription-userinfo": "expire=1893456000",
+        },
+      });
     mocks.parseSubscription.mockReturnValueOnce(parseResult([node("Remote")]));
     const sources = [
       source({
@@ -121,6 +141,7 @@ describe("createSourceActions parseMultipleSources", () => {
       expect.objectContaining({
         id: "provider",
         parsed: true,
+        detectedCountries: ["hk"],
         lastParsedContent: "https://example.com/provider.yaml",
       }),
       expect.objectContaining({

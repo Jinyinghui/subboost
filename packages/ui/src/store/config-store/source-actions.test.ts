@@ -1,4 +1,4 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resolveNodeNameFilter } from "@subboost/core/subscription/node-name-filter";
 import type { ParsedNode } from "@subboost/core/types/node";
 import type { SubscriptionSource } from "./definitions";
@@ -29,7 +29,15 @@ function deferred<T>() {
 }
 
 describe("createSourceActions", () => {
-  beforeEach(resetSourceActionMocks);
+  // 预解析防抖用 setTimeout：fake 掉它，避免一个测试里排队的预解析在后面的测试里触发、
+  // 污染共享 mock 的调用计数。只 fake 计时器，Date 等保持真实。
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+    resetSourceActionMocks();
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   it("removes nodes and references when a source is deleted", () => {
     const { actions, getState } = createHarness({
@@ -182,7 +190,7 @@ describe("createSourceActions", () => {
     expect(mocks.fetchUrlContentInBrowser).not.toHaveBeenCalled();
   });
 
-  it("imports proxy-provider URL sources without fetching node content", async () => {
+  it("imports proxy-provider URL sources without storing node content", async () => {
     const migratedCustomGroupName = "🧩 筛选组  美国";
     const { actions, getState } = createHarness({
       sources: [
@@ -215,7 +223,8 @@ describe("createSourceActions", () => {
 
     await actions.parseSingleSource("s1");
 
-    expect(mocks.fetchUrlContentInBrowser).not.toHaveBeenCalled();
+    // 预解析会拉取一次订阅（仅识别国家），但节点不进 store。
+    expect(mocks.fetchUrlContentInBrowser).toHaveBeenCalledTimes(1);
     expect(mocks.parseSubscription).not.toHaveBeenCalled();
     expect(getState().nodes.map((item: ParsedNode) => item.name)).toEqual(["Manual"]);
     expect(getState().listenerPorts).toEqual({ Manual: 41001 });
@@ -226,6 +235,7 @@ describe("createSourceActions", () => {
     expect(getState().sources[0]).toMatchObject({
       parsing: false,
       parsed: true,
+      detectedCountries: [],
       lastParsedContent: "https://example.com/provider.yaml",
       lastParsedTag: "TAG",
       lastParsedNameTemplate: "{tag}-{name}",
@@ -687,6 +697,100 @@ describe("createSourceActions", () => {
 
     expect(getState().nodes.map((item: ParsedNode) => item.name)).toEqual(["New"]);
     expect(getState().sources[0]).toMatchObject({ parsed: true, parsing: false, nodeCount: 1 });
+  });
+
+  describe("provider pre-parse for country detection", () => {
+    const providerUrl = "https://example.com/sub";
+
+    it("pre-parses a newly entered provider URL after a debounce and stores only countries", async () => {
+      mocks.fetchUrlContentInBrowser.mockResolvedValue({
+        content: "",
+        headers: {},
+        parseResult: parseResult([node("香港-01"), node("印度-01"), node("套餐到期：2026-01-01")]),
+      });
+      const { actions, getState } = createHarness({ sources: [] });
+
+      actions.setSources([source({ id: "s1", type: "url", content: providerUrl })]);
+
+      expect(mocks.fetchUrlContentInBrowser).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(mocks.fetchUrlContentInBrowser).toHaveBeenCalledTimes(1);
+      expect(mocks.fetchUrlContentInBrowser).toHaveBeenCalledWith(providerUrl, expect.anything());
+      expect(getState().sources[0]).toMatchObject({ parsed: true, detectedCountries: ["hk", "in"] });
+      expect(getState().nodes).toEqual([]);
+    });
+
+    it("does not pre-parse inline URL sources", async () => {
+      const { actions } = createHarness({ sources: [] });
+
+      actions.setSources([
+        source({ id: "s1", type: "url", content: providerUrl, useProxyProviders: false }),
+      ]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(mocks.fetchUrlContentInBrowser).not.toHaveBeenCalled();
+    });
+
+    it("re-detects countries when a provider URL changes", async () => {
+      mocks.fetchUrlContentInBrowser.mockResolvedValue({
+        content: "",
+        headers: {},
+        parseResult: parseResult([node("日本-01")]),
+      });
+      const { actions, getState } = createHarness({
+        sources: [
+          source({
+            id: "s1",
+            type: "url",
+            content: "https://example.com/old",
+            useProxyProviders: true,
+            detectedCountries: ["hk"],
+          }),
+        ],
+      });
+
+      actions.setSources([
+        source({
+          id: "s1",
+          type: "url",
+          content: providerUrl,
+          useProxyProviders: true,
+          detectedCountries: ["hk"],
+        }),
+      ]);
+      expect(getState().sources[0].detectedCountries).toBeUndefined();
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(getState().sources[0]).toMatchObject({ detectedCountries: ["jp"] });
+    });
+
+    it("cancels a pending pre-parse when the source is removed", async () => {
+      const { actions } = createHarness({ sources: [] });
+
+      actions.setSources([source({ id: "s1", type: "url", content: providerUrl })]);
+      actions.setSources([]);
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(mocks.fetchUrlContentInBrowser).not.toHaveBeenCalled();
+    });
+
+    it("still imports a provider source when its pre-parse fetch fails", async () => {
+      mocks.fetchUrlContentInBrowser.mockRejectedValueOnce(new Error("fetch failed"));
+      const { actions, getState } = createHarness({
+        sources: [
+          source({ id: "s1", type: "url", content: providerUrl, useProxyProviders: true }),
+        ],
+        nodes: [node("Provider Node", { _sourceIds: ["s1"], _originName: "Provider Node" }), node("Manual")],
+      });
+
+      await actions.parseSingleSource("s1");
+
+      expect(mocks.fetchUrlContentInBrowser).toHaveBeenCalledTimes(1);
+      expect(getState().sources[0]).toMatchObject({ parsed: true, detectedCountries: [] });
+      expect(getState().nodes.map((item: ParsedNode) => item.name)).toEqual(["Manual"]);
+    });
   });
 
 });

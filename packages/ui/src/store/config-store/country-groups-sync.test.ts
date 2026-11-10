@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import type { CustomProxyGroup } from "@subboost/core/types/config";
 import type { ParsedNode } from "@subboost/core/types/node";
 import { DEFAULT_COUNTRY_PROXY_GROUPS } from "./definitions";
-import { syncCountryGroupsWithNodes } from "./country-groups-sync";
+import {
+  collectDetectedCountries,
+  syncCountryGroupsWithNodes,
+} from "./country-groups-sync";
 import {
   buildCountryGroupDraftForRegion,
   resolveCountryGroupRegion,
@@ -142,5 +145,46 @@ describe("syncCountryGroupsWithNodes", () => {
     const added = next.find((group) => group.name === "🇮🇳 印度节点");
     expect(added?.id).toBe("country-in");
     expect(next.find((group) => group.id === "in")).toEqual(squatter);
+  });
+
+  it("numbers the fallback id when both the region id and the prefixed id are taken", () => {
+    const squatters: CustomProxyGroup[] = [
+      { id: "in", name: "印度专线", emoji: "", groupType: "select" },
+      { id: "country-in", name: "印度备用", emoji: "", groupType: "select" },
+    ];
+    const groups = [...DEFAULT_COUNTRY_PROXY_GROUPS.map((group) => ({ ...group })), ...squatters];
+    const next = syncCountryGroupsWithNodes(groups, [node("印度-01")]);
+    expect(next.find((group) => group.name === "🇮🇳 印度节点")?.id).toBe("country-in-2");
+  });
+
+  it("counts pre-parsed provider countries even with no stored nodes", () => {
+    const groups = DEFAULT_COUNTRY_PROXY_GROUPS.map((group) => ({ ...group }));
+    const next = syncCountryGroupsWithNodes(groups, [], new Set(["in", "th"]));
+    expect(next.find((group) => group.id === "in")?.name).toBe("🇮🇳 印度节点");
+    expect(next.find((group) => group.id === "in")?.enabled).not.toBe(false);
+    expect(next.find((group) => group.id === "th")?.name).toBe("🇹🇭 泰国节点");
+    expect(next.find((group) => group.id === "hk")?.enabled).toBe(false);
+  });
+
+  it("unions stored nodes and pre-parsed provider countries", () => {
+    const groups = DEFAULT_COUNTRY_PROXY_GROUPS.map((group) => ({ ...group }));
+    const next = syncCountryGroupsWithNodes(groups, [node("香港-01")], new Set(["in"]));
+    expect(next.find((group) => group.id === "hk")?.enabled).not.toBe(false);
+    expect(next.find((group) => group.id === "in")?.enabled).not.toBe(false);
+    expect(next.find((group) => group.id === "us")?.enabled).toBe(false);
+  });
+});
+
+describe("collectDetectedCountries", () => {
+  it("unions detected countries across sources and ignores missing ones", () => {
+    expect(
+      collectDetectedCountries([
+        { detectedCountries: ["hk", "jp"] },
+        {},
+        { detectedCountries: [] },
+        { detectedCountries: ["jp", "in"] },
+      ]),
+    ).toEqual(new Set(["hk", "jp", "in"]));
+    expect(collectDetectedCountries([])).toEqual(new Set());
   });
 });

@@ -2,7 +2,7 @@ import type { ParsedNode } from "@subboost/core/types/node";
 import { formatNodeNameFromTemplate } from "@subboost/core/node-name-template";
 import type { ConfigActions } from "../definitions";
 import { makeUniqueName } from "../definitions";
-import { syncCountryGroupsWithNodes } from "../country-groups-sync";
+import { collectDetectedCountries, syncCountryGroupsWithNodes } from "../country-groups-sync";
 import type { GetState, SetAndGenerateConfig, SetState } from "../store-types";
 
 type NodeActions = Pick<
@@ -26,7 +26,8 @@ export function createNodeActions(
 ): NodeActions {
   return {
     clearNodes: () => {
-      // 直接 set（不走 setAndGenerateConfig）：节点清空后国家分组也随之全部禁用。
+      // 直接 set（不走 setAndGenerateConfig）：节点清空后内联节点对应的国家分组全部禁用，
+      // 但 provider 模式订阅预解析出的国家仍保留（其节点不在 store 里）。
       set((state) => ({
         nodes: [],
         deletedNodeNames: [],
@@ -35,7 +36,11 @@ export function createNodeActions(
         generatedYaml: "",
         generatedYamlError: null,
         listenerPorts: {},
-        customProxyGroups: syncCountryGroupsWithNodes(state.customProxyGroups, []),
+        customProxyGroups: syncCountryGroupsWithNodes(
+          state.customProxyGroups,
+          [],
+          collectDetectedCountries(state.sources),
+        ),
       }));
     },
 

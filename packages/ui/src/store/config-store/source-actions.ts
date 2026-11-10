@@ -1,5 +1,8 @@
 import type { ParsedNode, ParseResult } from "@subboost/core/types/node";
+import type { NodeRegion } from "@subboost/core/types/config";
 import { parseSubscription } from "@subboost/core/parser";
+import { detectNodeCountries } from "@subboost/core/proxy-group-advanced";
+import { isSubscriptionInfoNodeName } from "@subboost/core/subscription/info-node-name";
 import { buildNodeContentKey, buildScopedNodeIdentityKey } from "@subboost/core/node-identity";
 import {
   detachSourceNodesFromState,
@@ -44,6 +47,29 @@ type SourceActions = Pick<
 
 function pickUrlFetchParseResult(fetched: Awaited<ReturnType<typeof fetchUrlContentInBrowser>>): ParseResult | null {
   return fetched.parseResult ?? null;
+}
+
+/**
+ * provider 模式订阅预解析：尽力拉取一次订阅，只识别节点里的国家（用于国家分组自动同步）。
+ * 节点本身不返回、不存入 store、不进入生成配置。任何失败（拉取失败、解析失败、URL 无效）
+ * 都返回 []，调用方按“无可识别国家”处理，绝不让预解析失败影响导入本身。
+ */
+async function preparseProviderSourceCountries(source: SubscriptionSource): Promise<NodeRegion[]> {
+  const normalizedUrl = tryNormalizeSubscriptionUrlInput(source.content.trim());
+  if (!normalizedUrl) return [];
+  try {
+    const fetched = await fetchUrlContentInBrowser(normalizedUrl, {
+      userinfoUrl: source.userinfoUrl,
+      userinfoUserAgent: source.userinfoUserAgent,
+    });
+    const result = fetched.parseResult ?? parseSubscription(fetched.content);
+    const names = result.nodes
+      .filter((node) => node && typeof node.name === "string" && !isSubscriptionInfoNodeName(node.name))
+      .map((node) => node.name);
+    return [...detectNodeCountries(names)];
+  } catch {
+    return [];
+  }
 }
 
 const DEFAULT_PARSE_FAILURE_MESSAGE = "解析失败";
@@ -106,20 +132,72 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
     return true;
   };
 
-  return {
+  // 订阅链接预解析防抖：provider 模式的 URL 源填入/改动后，稍等再拉取一次识别国家。
+  // 输入框每敲一下都会调 setSources，只在停下 800ms 后才真正触发，避免逐字拉取。
+  const PREPARSE_DEBOUNCE_MS = 800;
+  const preparseTimers = new Map<string, ReturnType<typeof setTimeout>>();
+  // parseSingleSource 的引用（actions 对象创建后回填，供防抖回调调用；不能走 get()，
+  // 因为 get() 在测试 harness 里只返回 ConfigState、不含 actions）。
+  const preparseTarget: { parseSingleSource?: SourceActions["parseSingleSource"] } = {};
+  const scheduleProviderPreparse = (sourceId: string) => {
+    const existing = preparseTimers.get(sourceId);
+    if (existing !== undefined) clearTimeout(existing);
+    preparseTimers.set(
+      sourceId,
+      setTimeout(() => {
+        preparseTimers.delete(sourceId);
+        if (preparseTarget.parseSingleSource) void preparseTarget.parseSingleSource(sourceId);
+      }, PREPARSE_DEBOUNCE_MS),
+    );
+  };
+  const clearProviderPreparse = (sourceId: string) => {
+    const existing = preparseTimers.get(sourceId);
+    if (existing !== undefined) {
+      clearTimeout(existing);
+      preparseTimers.delete(sourceId);
+    }
+  };
+
+  const actions: SourceActions = {
     // 设置订阅源
     // 订阅链接默认走 proxy-providers：未显式标记 useProxyProviders=false 的 URL 源
     // 一律补为 true（新源、旧配置迁移都走这里）；显式 false（用户切回内联）保持不变。
     setSources: (sources: SubscriptionSource[]) => {
-      const normalized = sources.map((source) =>
-        source.type === "url" && source.useProxyProviders === undefined
-          ? { ...source, useProxyProviders: true as const }
-          : source
-      );
       const prev = get().sources;
+      const prevById = new Map(prev.map((s) => [s.id, s]));
+      const normalized = sources.map((source) => {
+        const base =
+          source.type === "url" && source.useProxyProviders === undefined
+            ? { ...source, useProxyProviders: true as const }
+            : source;
+        // URL 内容一变，旧的预解析国家就失效了（等新的预解析重新识别）；
+        // 只有之前确实有识别结果时才写回 undefined，避免无谓地改动源对象。
+        const prevSource = prevById.get(source.id);
+        if (
+          base.type === "url" &&
+          prevSource &&
+          prevSource.content !== base.content &&
+          base.detectedCountries !== undefined
+        ) {
+          return { ...base, detectedCountries: undefined };
+        }
+        return base;
+      });
       const prevIds = new Set(prev.map((s) => s.id));
       const nextIds = new Set(normalized.map((s) => s.id));
       const removed = new Set(Array.from(prevIds).filter((id) => !nextIds.has(id)));
+      for (const id of removed) clearProviderPreparse(id);
+      // provider 模式的 URL 源：内容有效且尚未有识别结果时，防抖触发一次预解析；
+      // 内容被清空/写坏时取消待触发的预解析。
+      for (const source of normalized) {
+        if (source.type !== "url" || !source.useProxyProviders) continue;
+        const content = source.content.trim();
+        if (!content || !tryNormalizeSubscriptionUrlInput(content) || source.detectedCountries !== undefined) {
+          clearProviderPreparse(source.id);
+          continue;
+        }
+        scheduleProviderPreparse(source.id);
+      }
 
       if (removed.size === 0) {
         set({ sources: normalized });
@@ -207,6 +285,8 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
       const { sources } = get();
       const source = sources.find((s) => s.id === sourceId);
       if (!source || !source.content.trim()) return;
+      // 手动导入时取消待触发的防抖预解析（本次导入本身就会做预解析，避免重复拉取）。
+      clearProviderPreparse(sourceId);
       const operation = importOperations.startSingle(source);
 
       const currentSourceContent =
@@ -236,7 +316,9 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
         let subscriptionUserInfo: SubscriptionUserInfo | undefined;
         let prefetchedParseResult: ParseResult | null = null;
 
-        // URL 源的 proxy-providers 模式：不拉取/解析节点，仅标记为已导入并移除该源原节点
+        // URL 源的 proxy-providers 模式：不拉取/解析节点，仅标记为已导入并移除该源原节点。
+        // 但先做一次尽力预解析识别国家（只写 detectedCountries，节点不进 store），
+        // 这样国家分组能随订阅内容自动同步；预解析失败时 detectedCountries 为 []，不影响导入。
         if (source.type === "url" && source.useProxyProviders) {
           const rawUrl = source.content.trim();
           const normalizedUrl = tryNormalizeSubscriptionUrlInput(rawUrl);
@@ -247,6 +329,8 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
           if (!["http:", "https:"].includes(parsed.protocol)) {
             throw new Error("只支持 HTTP/HTTPS url");
           }
+
+          const detectedCountries = await preparseProviderSourceCountries(source);
 
           if (discardStaleSingle(operation)) return;
 
@@ -279,6 +363,7 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
                       subscriptionUserInfo: undefined,
                       error: undefined,
                       errorInfo: undefined,
+                      detectedCountries,
                       lastParsedContent: normalizedUrl,
                       lastParsedTag: currentTag || undefined,
                       lastParsedNameTemplate: currentNameTemplate || undefined,
@@ -436,6 +521,7 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
           subscriptionUserInfo?: SubscriptionUserInfo;
           error?: string;
           errorInfo?: SubscriptionImportErrorInfo;
+          detectedCountries?: NodeRegion[];
           lastParsedContent?: string;
           lastParsedTag?: string;
           lastParsedNameTemplate?: string;
@@ -450,7 +536,8 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
           let subscriptionUserInfo: SubscriptionUserInfo | undefined;
           let prefetchedParseResult: ParseResult | null = null;
 
-          // URL 源的 proxy-providers 模式：不拉取/解析节点，仅更新导入状态（节点由客户端拉取）
+          // URL 源的 proxy-providers 模式：不拉取/解析节点，仅更新导入状态（节点由客户端拉取），
+          // 但先尽力预解析一次识别国家（只写 detectedCountries），让国家分组能随订阅自动同步。
           if (source.type === "url" && source.useProxyProviders) {
             const rawUrl = source.content.trim();
             try {
@@ -475,6 +562,7 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
             const currentNameTemplate = typeof source.nameTemplate === "string" ? source.nameTemplate.trim() : "";
             sourceMeta.set(source.id, {
               parsed: true,
+              detectedCountries: await preparseProviderSourceCountries(source),
               lastParsedContent: tryNormalizeSubscriptionUrlInput(rawUrl) ?? rawUrl,
               lastParsedTag: currentTag || undefined,
               lastParsedNameTemplate: currentNameTemplate || undefined,
@@ -683,6 +771,7 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
               ...(meta.subscriptionUserInfo ? { subscriptionUserInfo: meta.subscriptionUserInfo } : { subscriptionUserInfo: undefined }),
               ...(meta.error ? { error: meta.error } : { error: undefined }),
               ...(meta.errorInfo ? { errorInfo: meta.errorInfo } : { errorInfo: undefined }),
+              ...(meta.detectedCountries !== undefined ? { detectedCountries: meta.detectedCountries } : {}),
               ...(typeof meta.lastParsedContent === "string" && meta.lastParsedContent.trim()
                 ? { lastParsedContent: meta.lastParsedContent.trim() }
                 : {}),
@@ -697,4 +786,6 @@ export function createSourceActions(set: SetState, get: GetState, setAndGenerate
       importOperations.finishBatch(operation);
     },
   };
+  preparseTarget.parseSingleSource = actions.parseSingleSource;
+  return actions;
 }

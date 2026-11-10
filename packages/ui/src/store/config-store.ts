@@ -7,7 +7,7 @@ import { persist, createJSONStorage } from "zustand/middleware";
 import type { ConfigActions, ConfigState } from "./config-store/definitions";
 import { initialState } from "./config-store/definitions";
 import { computeGeneratedYamlResult } from "./config-store/generated-yaml";
-import { syncCountryGroupsWithNodes } from "./config-store/country-groups-sync";
+import { collectDetectedCountries, syncCountryGroupsWithNodes } from "./config-store/country-groups-sync";
 import { createSourceActions } from "./config-store/source-actions";
 import { createNodeActions } from "./config-store/actions/node-actions";
 import { createTemplateActions } from "./config-store/actions/template-actions";
@@ -65,7 +65,11 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
           // 节点变化时自动同步国家分组（启用/禁用/追加），再算生成配置。
           const patchNodes = (patch as Partial<StoreState>).nodes;
           if (patchNodes && patchNodes !== state.nodes) {
-            const synced = syncCountryGroupsWithNodes(next.customProxyGroups, patchNodes);
+            const synced = syncCountryGroupsWithNodes(
+              next.customProxyGroups,
+              patchNodes,
+              collectDetectedCountries(next.sources),
+            );
             if (synced !== next.customProxyGroups) {
               resultPatch = { ...resultPatch, customProxyGroups: synced };
               next.customProxyGroups = synced;

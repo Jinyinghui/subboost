@@ -90,6 +90,37 @@ describe("useConfigStore", () => {
     ).toBe(true);
   }, 15_000);
 
+  it("keeps provider pre-parsed countries enabled when nodes change", async () => {
+    const { useConfigStore } = await loadStore();
+
+    // provider 模式订阅已预解析出印度（节点本身不在 store 里）
+    useConfigStore.getState().setSources([
+      {
+        id: "s1",
+        type: "url",
+        content: "https://example.com/sub",
+        useProxyProviders: true,
+        detectedCountries: ["in"],
+      },
+    ]);
+
+    // 加入一个香港节点：香港启用（来自节点），印度自动追加并启用（来自预解析）
+    useConfigStore
+      .getState()
+      .parseContent("ss://YWVzLTEyOC1nY206dGVzdA@hk.example.com:8388#香港-01");
+    const state = useConfigStore.getState();
+    expect(state.customProxyGroups.find((group) => group.id === "hk")?.enabled).not.toBe(false);
+    expect(state.customProxyGroups.find((group) => group.id === "in")?.name).toBe("🇮🇳 印度节点");
+    expect(state.customProxyGroups.find((group) => group.id === "in")?.enabled).not.toBe(false);
+    expect(state.customProxyGroups.find((group) => group.id === "us")?.enabled).toBe(false);
+
+    // 清空内联节点：香港禁用，但印度仍启用（provider 预解析的国家不受影响）
+    useConfigStore.getState().clearNodes();
+    const cleared = useConfigStore.getState();
+    expect(cleared.customProxyGroups.find((group) => group.id === "hk")?.enabled).toBe(false);
+    expect(cleared.customProxyGroups.find((group) => group.id === "in")?.enabled).not.toBe(false);
+  }, 15_000);
+
   it("switches config draft storage scopes and regenerates restored drafts", async () => {
     const storage = createMemoryStorage({
       "subboost-config:user:u1": JSON.stringify({

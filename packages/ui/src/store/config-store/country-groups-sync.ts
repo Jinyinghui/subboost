@@ -1,11 +1,26 @@
 import { detectNodeCountries, isCountryProxyGroup } from "@subboost/core/proxy-group-advanced";
 import { isSubscriptionInfoNodeName } from "@subboost/core/subscription/info-node-name";
-import type { CustomProxyGroup } from "@subboost/core/types/config";
+import type { CustomProxyGroup, NodeRegion } from "@subboost/core/types/config";
 import type { ParsedNode } from "@subboost/core/types/node";
 import {
   buildCountryGroupDraftForRegion,
   resolveCountryGroupRegion,
 } from "@subboost/ui/product/converter/advanced-mode/sections/country-groups";
+
+/**
+ * 汇总各订阅源预解析识别出的国家（provider 模式专用，见 SubscriptionSource.detectedCountries）。
+ */
+export function collectDetectedCountries(
+  sources: ReadonlyArray<{ detectedCountries?: readonly NodeRegion[] }>,
+): Set<NodeRegion> {
+  const out = new Set<NodeRegion>();
+  for (const source of sources) {
+    for (const region of source.detectedCountries ?? []) out.add(region);
+  }
+  return out;
+}
+
+const EMPTY_REGION_SET: ReadonlySet<NodeRegion> = new Set();
 
 /**
  * 按当前节点自动同步国家分组（每次订阅 / 节点变化时跑）：
@@ -14,11 +29,13 @@ import {
  * - 节点里有、分组里没有的国家 → 自动追加分组（名字与表达式按国家列表生成）
  * - 非国家分组、以及对不上任何国家的分组：不动
  * - 没有任何国家信息的节点（包括订阅信息节点）：不参与任何分组
+ * - extraRegions：订阅源预解析识别出的国家（provider 模式下节点不进 store，靠这个参与同步）
  * 无变化时返回原数组引用，调用方据此判断是否需要写回。
  */
 export function syncCountryGroupsWithNodes(
   groups: CustomProxyGroup[],
   nodes: ParsedNode[],
+  extraRegions: ReadonlySet<NodeRegion> = EMPTY_REGION_SET,
 ): CustomProxyGroup[] {
   const names = nodes
     .filter(
@@ -29,6 +46,7 @@ export function syncCountryGroupsWithNodes(
     )
     .map((node) => node.name);
   const present = detectNodeCountries(names);
+  for (const region of extraRegions) present.add(region);
 
   let changed = false;
   const takenIds = new Set(groups.map((group) => group.id));

@@ -6,6 +6,7 @@ import type {
   CustomRuleSet,
   GroupListenerBinding,
   GroupListenerTarget,
+  NodeRegion,
   ProxyGroupAdvancedConfig,
   TemplateType,
 } from "@subboost/core/types/config";
@@ -74,8 +75,12 @@ export interface SubscriptionSource {
   tag?: string;
   // 节点命名模板：支持 {tag} / {name}
   nameTemplate?: string;
-  // URL 源使用 proxy-providers 模式：不在 SubBoost 内拉取/解析节点，仅在最终配置中写入 proxy-providers 供客户端拉取
+  // URL 源使用 proxy-providers 模式：不在 SubBoost 内拉取/解析节点，仅在最终配置中写入 proxy-providers 供客户端拉取。
+  // 但为了国家分组自动同步，填入/改动 URL 后会做一次尽力预解析：只识别节点里的国家（见 detectedCountries），
+  // 节点本身不存入 store、不进入生成配置；预解析失败时不影响导入（该源不参与国家同步）。
   useProxyProviders?: boolean;
+  // 预解析识别出的国家（provider 模式专用）：undefined = 尚未预解析，[] = 已解析但无可识别国家。
+  detectedCountries?: NodeRegion[];
   // 独立的流量/到期元信息 URL（可选）
   userinfoUrl?: string;
   // 获取流量/到期元信息时使用的自定义 User-Agent（可选）

@@ -24,6 +24,11 @@ describe("source actions batch import branch coverage", () => {
   it("parses mixed batch sources and keeps source metadata aligned", async () => {
     mocks.fetchUrlContentInBrowser
       .mockResolvedValueOnce({
+        content: "",
+        headers: {},
+        parseResult: parseResult([node("香港-01")]),
+      })
+      .mockResolvedValueOnce({
         content: "ignored because parseResult is provided",
         headers: {
           "subscription-userinfo": "expire=1893456000",
@@ -115,6 +120,7 @@ describe("source actions batch import branch coverage", () => {
         id: "provider-ok",
         parsed: true,
         parsing: false,
+        detectedCountries: ["hk"],
         lastParsedContent: "https://provider.example.com/provider.yaml",
         lastParsedTag: "Provider",
         lastParsedNameTemplate: "{tag}-{name}",
