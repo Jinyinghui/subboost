@@ -242,6 +242,9 @@ export interface ConfigState {
   generatedYaml: string;
   generatedYamlError: string | null;
 
+  // 手动编辑的预览 YAML（null = 未编辑，显示生成结果；改动配置重新生成时会清掉）
+  editedYaml: string | null;
+
   // 历史记录（用于撤销）
   history: ConfigHistoryEntry[];
   historyIndex: number;
@@ -336,6 +339,7 @@ export interface ConfigActions {
   // 生成配置
   generateConfig: () => string;
   setGeneratedYaml: (yaml: string) => void;
+  setEditedYaml: (yaml: string | null) => void;
 
   // 历史操作
   undo: () => void;
@@ -416,6 +420,7 @@ export const initialState: ConfigState = {
   groupListeners: [],
   generatedYaml: "",
   generatedYamlError: null,
+  editedYaml: null,
   history: [],
   historyIndex: -1,
 };

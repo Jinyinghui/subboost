@@ -55,6 +55,8 @@ function HomeSurfaceInner({ adapter }: Props) {
     deletedNodes,
     generatedYaml,
     generatedYamlError,
+    editedYaml,
+    setEditedYaml,
     isLoading: configLoading,
     sources: storeSources,
     setSources: setStoreSources,
@@ -91,6 +93,7 @@ function HomeSurfaceInner({ adapter }: Props) {
 
   const showAiColumn = Boolean(user?.aiAssistantEnabled);
   const [authChecked, setAuthChecked] = React.useState(false);
+  const [isEditingYaml, setIsEditingYaml] = React.useState(false);
 
   const subscription = useSubscriptionLink({
     authChecked,
@@ -209,6 +212,10 @@ function HomeSurfaceInner({ adapter }: Props) {
       editSubscriptionId={editSubscriptionId}
       generatedYaml={generatedYaml}
       generatedYamlError={generatedYamlError}
+      editedYaml={editedYaml}
+      onEditedYamlChange={setEditedYaml}
+      isEditingYaml={isEditingYaml}
+      onIsEditingYamlChange={setIsEditingYaml}
       configLoading={configLoading}
       hasValidSources={hasValidSources}
       handleGenerate={handleGenerate}

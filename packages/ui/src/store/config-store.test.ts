@@ -121,6 +121,65 @@ describe("useConfigStore", () => {
     expect(cleared.customProxyGroups.find((group) => group.id === "in")?.enabled).not.toBe(false);
   }, 15_000);
 
+  it("tracks manually edited preview YAML and clears it on regeneration", async () => {
+    const { useConfigStore } = await loadStore();
+    const state = () => useConfigStore.getState();
+
+    // 初始没有编辑
+    expect(state().editedYaml).toBeNull();
+
+    state().setDnsYaml("dns: {}");
+    expect(state().generatedYaml).toBe("yaml:dns: {}");
+    state().setEditedYaml("proxies: []\n# hand tuned");
+    expect(state().editedYaml).toBe("proxies: []\n# hand tuned");
+    expect(state().generatedYaml).toBe("yaml:dns: {}");
+
+    // 配置没变（生成结果不变）时编辑保留
+    state().setDnsYaml("dns: {}");
+    expect(state().editedYaml).toBe("proxies: []\n# hand tuned");
+
+    // 配置变化导致重新生成：编辑清掉
+    state().setDnsYaml("dns: { other: true }");
+    expect(state().generatedYaml).toBe("yaml:dns: { other: true }");
+    expect(state().editedYaml).toBeNull();
+
+    // 手动点生成也清掉编辑（即使生成结果没变）
+    state().setEditedYaml("proxies: []\n# hand tuned");
+    state().generateConfig();
+    expect(state().editedYaml).toBeNull();
+
+    // 直接写生成结果也清掉编辑
+    state().setEditedYaml("proxies: []\n# hand tuned");
+    state().setGeneratedYaml("yaml:manual");
+    expect(state().generatedYaml).toBe("yaml:manual");
+    expect(state().editedYaml).toBeNull();
+
+    // 恢复按钮就是把 editedYaml 置回 null
+    state().setEditedYaml("proxies: []\n# hand tuned");
+    state().setEditedYaml(null);
+    expect(state().editedYaml).toBeNull();
+  }, 15_000);
+
+  it("clears edited preview YAML on undo and reset", async () => {
+    const { useConfigStore } = await loadStore();
+    const state = () => useConfigStore.getState();
+
+    state().setDnsYaml("dns: { a: 1 }");
+    state().pushHistory();
+    state().setDnsYaml("dns: { a: 2 }");
+    state().pushHistory();
+    state().setEditedYaml("proxies: []\n# hand tuned");
+
+    state().undo();
+    expect(state().generatedYaml).toBe("yaml:dns: { a: 1 }");
+    expect(state().editedYaml).toBeNull();
+
+    state().setEditedYaml("proxies: []\n# hand tuned");
+    state().reset();
+    expect(state().editedYaml).toBeNull();
+    expect(state().generatedYaml).toBe("");
+  }, 15_000);
+
   it("switches config draft storage scopes and regenerates restored drafts", async () => {
     const storage = createMemoryStorage({
       "subboost-config:user:u1": JSON.stringify({

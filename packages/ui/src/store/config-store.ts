@@ -78,7 +78,7 @@ export const useConfigStore = create<ConfigState & ConfigActions>()(
           const { yaml, error } = computeGeneratedYamlResult(next);
 
           if (yaml === next.generatedYaml && error === next.generatedYamlError) return resultPatch;
-          return { ...resultPatch, generatedYaml: yaml, generatedYamlError: error };
+          return { ...resultPatch, generatedYaml: yaml, generatedYamlError: error, editedYaml: null };
         });
       };
 

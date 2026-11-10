@@ -143,6 +143,33 @@ describe("useHomeActions", () => {
     expect(revokeObjectURL).toHaveBeenCalledWith("blob:config");
   });
 
+  it("downloads the manually edited YAML when the preview was edited", async () => {
+    vi.useFakeTimers();
+    const click = vi.fn();
+    const anchor = { href: "", download: "", style: { display: "" }, click };
+    const appendChild = vi.fn();
+    const removeChild = vi.fn();
+    const createObjectURL = vi.fn(() => "blob:config");
+    const revokeObjectURL = vi.fn();
+    vi.stubGlobal("document", {
+      body: { appendChild, removeChild },
+      createElement: vi.fn(() => anchor),
+    });
+    vi.stubGlobal("URL", { createObjectURL, revokeObjectURL });
+    mocks.bag.storeState.editedYaml = "proxies: []\n# hand tuned";
+
+    const recordConfigDownload = vi.fn();
+    const { handleDownload } = useRenderedHook({ recordConfigDownload });
+
+    handleDownload("quick");
+
+    expect(recordConfigDownload).toHaveBeenCalledWith("template-1");
+    expect(createObjectURL).toHaveBeenCalledWith(expect.any(File));
+    const file = createObjectURL.mock.calls[0][0] as File;
+    await expect(file.text()).resolves.toBe("proxies: []\n# hand tuned");
+    expect(click).toHaveBeenCalled();
+  });
+
   it("skips downloads when YAML is empty or invalid", () => {
     const recordConfigDownload = vi.fn();
 

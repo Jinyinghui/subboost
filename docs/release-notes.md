@@ -1,3 +1,15 @@
+# SubBoost v2.11.17
+
+## 中文
+
+- 预览的 YAML 现在可以直接改：YAML 预览右上角多了“编辑”按钮，点开后在同一个深色面板里直接改文本（Tab 键插两个空格，不会跳走焦点），点“完成”回到语法高亮。改过后预览区显示“已编辑”，“下载配置”下载的就是改过的版本；“恢复生成结果”可以丢弃改动、回到生成结果。
+- 注意：编辑只影响预览和下载的文本，不会同步回左侧的结构化配置（分组、规则、订阅链接仍按结构化配置生成）。改动配置、点“生成”、撤销/重做时，预览会重新生成，之前的编辑会被清掉。
+
+## English
+
+- The previewed YAML is now editable: the YAML preview has an "Edit" button at its top right, opening an editor in the same dark panel (Tab inserts two spaces instead of moving focus); "Done" returns to the syntax-highlighted view. After editing, the preview shows an "edited" badge and "Download config" downloads the edited text; "Restore generated" discards the edits and returns to the generated output.
+- Note: editing only affects the previewed and downloaded text — it is not written back into the structured config on the left (groups, rules, and subscription links still generate from the structured config). When the config changes, Generate is clicked, or undo/redo runs, the preview regenerates and any edits are discarded.
+
 # SubBoost v2.11.16
 
 ## 中文

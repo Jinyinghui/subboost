@@ -23,17 +23,20 @@ function createStore(initial: Record<string, unknown>) {
 
 describe("config store history actions", () => {
   it("generates YAML only when output changes and supports direct YAML writes", () => {
-    const store = createStore({ generatedYaml: "", generatedYamlError: "old" });
+    const store = createStore({ generatedYaml: "", generatedYamlError: "old", editedYaml: "stale edit" });
     const actions = createHistoryActions(store.set as any, store.get as any);
 
     expect(actions.generateConfig()).toBe("generated");
-    expect(store.state()).toEqual({ generatedYaml: "generated", generatedYamlError: null });
+    expect(store.state()).toEqual({ generatedYaml: "generated", generatedYamlError: null, editedYaml: null });
 
     actions.generateConfig();
     expect(store.set).toHaveBeenLastCalledWith(expect.any(Function));
 
     actions.setGeneratedYaml("manual");
-    expect(store.state()).toEqual({ generatedYaml: "manual", generatedYamlError: null });
+    expect(store.state()).toEqual({ generatedYaml: "manual", generatedYamlError: null, editedYaml: null });
+
+    actions.setEditedYaml("hand tuned");
+    expect(store.state()).toEqual({ generatedYaml: "manual", generatedYamlError: null, editedYaml: "hand tuned" });
   });
 
   it("pushes bounded history and supports undo/redo boundaries", () => {

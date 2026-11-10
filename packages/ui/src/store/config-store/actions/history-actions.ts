@@ -6,7 +6,7 @@ import type { GetState, SetState } from "../store-types";
 
 type HistoryActions = Pick<
   ConfigActions,
-  "generateConfig" | "setGeneratedYaml" | "pushHistory" | "undo" | "redo" | "reset"
+  "generateConfig" | "setGeneratedYaml" | "setEditedYaml" | "pushHistory" | "undo" | "redo" | "reset"
 >;
 
 function restoreHistoryEntry(
@@ -31,15 +31,21 @@ export function createHistoryActions(set: SetState, get: GetState): HistoryActio
     generateConfig: () => {
       const { yaml, error } = computeGeneratedYamlResult(get());
       set((state) =>
-        state.generatedYaml === yaml && state.generatedYamlError === error
+        state.generatedYaml === yaml &&
+        state.generatedYamlError === error &&
+        state.editedYaml === null
           ? state
-          : { generatedYaml: yaml, generatedYamlError: error }
+          : { generatedYaml: yaml, generatedYamlError: error, editedYaml: null }
       );
       return yaml;
     },
 
     setGeneratedYaml: (yaml: string) => {
-      set({ generatedYaml: yaml, generatedYamlError: null });
+      set({ generatedYaml: yaml, generatedYamlError: null, editedYaml: null });
+    },
+
+    setEditedYaml: (yaml: string | null) => {
+      set({ editedYaml: yaml });
     },
 
     pushHistory: () => {
@@ -70,6 +76,7 @@ export function createHistoryActions(set: SetState, get: GetState): HistoryActio
           const historyIndex = state.historyIndex - 1;
           return {
             historyIndex,
+            editedYaml: null,
             ...restoreHistoryEntry(state.history[historyIndex]),
           };
         }
@@ -83,6 +90,7 @@ export function createHistoryActions(set: SetState, get: GetState): HistoryActio
           const historyIndex = state.historyIndex + 1;
           return {
             historyIndex,
+            editedYaml: null,
             ...restoreHistoryEntry(state.history[historyIndex]),
           };
         }

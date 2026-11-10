@@ -39,11 +39,13 @@ export function useHomeActions({
   const interactions = useProductInteractionAdapter();
 
   const handleDownload = React.useCallback((mode: ProductMode) => {
-    if (!generatedYaml || generatedYamlError) return;
+    const state = useConfigStore.getState();
+    // 预览被手动改过就下载改过的版本，否则下载生成结果。
+    const yaml = state.editedYaml ?? generatedYaml;
+    if (!yaml || generatedYamlError) return;
 
     recordConfigDownload?.(appliedTemplateId);
 
-    const state = useConfigStore.getState();
     interactions.configDownloaded?.({
       mode,
       nodeCount: state.nodes.length,
@@ -52,7 +54,7 @@ export function useHomeActions({
 
     const timestamp = getCompactDateStampInBeijing();
     const filename = `clash-config-${timestamp}.yaml`;
-    const blob = new Blob([generatedYaml], { type: "application/x-yaml;charset=utf-8" });
+    const blob = new Blob([yaml], { type: "application/x-yaml;charset=utf-8" });
     const file = new File([blob], filename, { type: "application/x-yaml;charset=utf-8" });
     const url = URL.createObjectURL(file);
 

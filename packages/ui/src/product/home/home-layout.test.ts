@@ -117,7 +117,7 @@ vi.mock("@subboost/ui/product/interactions", () => ({
   useProductInteractionAdapter: () => mocks.interactions,
 }));
 
-import { HomeLayout } from "./home-layout";
+import { HomeLayout, handleYamlEditorTabKeyDown } from "./home-layout";
 
 function createSubscription(overrides: Record<string, unknown> = {}) {
   return {
@@ -160,12 +160,32 @@ const baseProps = {
   editSubscriptionId: null,
   generatedYaml: "",
   generatedYamlError: null,
+  editedYaml: null,
+  onEditedYamlChange: vi.fn(),
+  isEditingYaml: false,
+  onIsEditingYamlChange: vi.fn(),
   configLoading: false,
   hasValidSources: false,
   handleGenerate: vi.fn(),
   handleDownload: vi.fn(),
   subscription: createSubscription(),
 };
+
+function buttonText(button: any): string {
+  const collect = (node: any): string => {
+    if (typeof node === "string" || typeof node === "number") return String(node);
+    if (Array.isArray(node)) return node.map(collect).join("");
+    if (node && typeof node === "object") return collect(node.props?.children);
+    return "";
+  };
+  return collect(button.children);
+}
+
+function findButton(label: string) {
+  const button = mocks.buttons.find((candidate: any) => buttonText(candidate).includes(label));
+  expect(button).toBeDefined();
+  return button;
+}
 
 describe("HomeLayout", () => {
   beforeEach(() => {
@@ -263,10 +283,10 @@ describe("HomeLayout", () => {
     expect(mocks.interactions.modeChanged).toHaveBeenCalledWith({ mode: "quick" });
     expect(mocks.yamlHighlight).toMatchObject({ content: "mixed-port: 7890" });
 
-    mocks.buttons[0].onClick();
-    mocks.buttons[1].onClick();
-    mocks.buttons[2].onClick();
-    mocks.buttons[3].onClick();
+    findButton("处理中").onClick();
+    findButton("保存模板").onClick();
+    findButton("下载配置").onClick();
+    findButton("保存订阅").onClick();
 
     expect(handleGenerate).toHaveBeenCalledWith("advanced");
     expect(onTemplateUploadOpen).toHaveBeenCalled();
@@ -299,5 +319,119 @@ describe("HomeLayout", () => {
     expect(html).toContain("基础和 DNS 配置有错误");
     expect(html).toContain("dns is invalid");
     expect(mocks.yamlHighlight).toBeUndefined();
+  });
+
+  it("shows the edited YAML in the preview with edit and reset controls", () => {
+    const onEditedYamlChange = vi.fn();
+    const onIsEditingYamlChange = vi.fn();
+
+    renderToStaticMarkup(
+      React.createElement(HomeLayout, {
+        ...baseProps,
+        generatedYaml: "mixed-port: 7890",
+        generatedYamlError: null,
+        editedYaml: "mixed-port: 7890\n# hand tuned",
+        onEditedYamlChange,
+        isEditingYaml: false,
+        onIsEditingYamlChange,
+      })
+    );
+
+    // 高亮预览显示改过的版本
+    expect(mocks.yamlHighlight).toMatchObject({ content: "mixed-port: 7890\n# hand tuned" });
+
+    // 已编辑徽标 + 恢复按钮 + 编辑按钮
+    expect(findButton("恢复生成结果")).toBeDefined();
+    expect(findButton("编辑")).toBeDefined();
+
+    findButton("编辑").onClick();
+    expect(onIsEditingYamlChange).toHaveBeenCalledWith(true);
+    findButton("恢复生成结果").onClick();
+    expect(onEditedYamlChange).toHaveBeenCalledWith(null);
+  });
+
+  it("renders an editable textarea with the effective YAML in edit mode", () => {
+    const onEditedYamlChange = vi.fn();
+
+    const html = renderToStaticMarkup(
+      React.createElement(HomeLayout, {
+        ...baseProps,
+        generatedYaml: "mixed-port: 7890",
+        generatedYamlError: null,
+        editedYaml: "mixed-port: 7890\n# hand tuned",
+        onEditedYamlChange,
+        isEditingYaml: true,
+        onIsEditingYamlChange: vi.fn(),
+      })
+    );
+
+    expect(html).toContain("<textarea");
+    expect(html).toContain("mixed-port: 7890\n# hand tuned");
+    expect(html).toContain("完成");
+    expect(mocks.yamlHighlight).toBeUndefined();
+  });
+
+  it("hides the edit toolbar when there is no YAML to edit", () => {
+    renderToStaticMarkup(
+      React.createElement(HomeLayout, {
+        ...baseProps,
+        generatedYaml: "",
+        generatedYamlError: null,
+      })
+    );
+
+    expect(mocks.buttons.find((button: any) => buttonText(button).includes("编辑"))).toBeUndefined();
+    expect(mocks.yamlHighlight).toBeUndefined();
+  });
+
+  it("inserts two spaces on Tab and restores the caret in the YAML editor", () => {
+    const onEditedYamlChange = vi.fn();
+    const setSelectionRange = vi.fn();
+    const preventDefault = vi.fn();
+
+    // 非 Tab 键：什么都不做
+    handleYamlEditorTabKeyDown(
+      { key: "a", preventDefault, currentTarget: { selectionStart: 0, selectionEnd: 0, setSelectionRange } } as any,
+      "mixed-port: 7890",
+      onEditedYamlChange
+    );
+    expect(preventDefault).not.toHaveBeenCalled();
+    expect(onEditedYamlChange).not.toHaveBeenCalled();
+
+    // Tab 键：选中区替换成两个空格；当前环境没有 requestAnimationFrame，走无光标恢复分支
+    expect(typeof requestAnimationFrame).toBe("undefined");
+    handleYamlEditorTabKeyDown(
+      {
+        key: "Tab",
+        preventDefault,
+        currentTarget: { selectionStart: 4, selectionEnd: 5, setSelectionRange },
+      } as any,
+      "abcd-ef",
+      onEditedYamlChange
+    );
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(onEditedYamlChange).toHaveBeenCalledWith("abcd  ef");
+    expect(setSelectionRange).not.toHaveBeenCalled();
+
+    // 有 requestAnimationFrame 时：恢复光标到插入点后面
+    vi.stubGlobal(
+      "requestAnimationFrame",
+      (callback: () => void) => {
+        callback();
+        return 1;
+      }
+    );
+    handleYamlEditorTabKeyDown(
+      {
+        key: "Tab",
+        preventDefault,
+        currentTarget: { selectionStart: 2, selectionEnd: 2, setSelectionRange },
+      } as any,
+      "abcd",
+      onEditedYamlChange
+    );
+    expect(onEditedYamlChange).toHaveBeenCalledWith("ab  cd");
+    expect(setSelectionRange).toHaveBeenCalledWith(4, 4);
+    vi.unstubAllGlobals();
   });
 });

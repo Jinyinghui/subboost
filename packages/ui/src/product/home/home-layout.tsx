@@ -70,6 +70,10 @@ type Props = {
 
   generatedYaml: string;
   generatedYamlError: string | null;
+  editedYaml: string | null;
+  onEditedYamlChange: (yaml: string | null) => void;
+  isEditingYaml: boolean;
+  onIsEditingYamlChange: (editing: boolean) => void;
   configLoading: boolean;
   hasValidSources: boolean;
 
@@ -91,6 +95,28 @@ type Props = {
 const DESKTOP_PANEL_MIN_HEIGHT_CLASS = "lg:min-h-[39rem]";
 const DESKTOP_PANEL_CONTENT_MIN_HEIGHT_CLASS = "lg:min-h-[30rem]";
 
+/**
+ * YAML 编辑框里按 Tab 插入两个空格（而不是跳走焦点），并把光标放回插入点后面。
+ * 单独导出以便单测：静态渲染测不到键盘事件。
+ */
+export function handleYamlEditorTabKeyDown(
+  event: React.KeyboardEvent<HTMLTextAreaElement>,
+  previewYaml: string,
+  onEditedYamlChange: (yaml: string | null) => void
+) {
+  if (event.key !== "Tab") return;
+  event.preventDefault();
+  const target = event.currentTarget;
+  const { selectionStart, selectionEnd } = target;
+  onEditedYamlChange(`${previewYaml.slice(0, selectionStart)}  ${previewYaml.slice(selectionEnd)}`);
+  // 受控重渲染后把光标放回插入点后面。
+  if (typeof requestAnimationFrame !== "undefined") {
+    requestAnimationFrame(() => {
+      target.setSelectionRange(selectionStart + 2, selectionStart + 2);
+    });
+  }
+}
+
 export function HomeLayout({
   showAiColumn,
   user,
@@ -100,6 +126,10 @@ export function HomeLayout({
   editSubscriptionId,
   generatedYaml,
   generatedYamlError,
+  editedYaml,
+  onEditedYamlChange,
+  isEditingYaml,
+  onIsEditingYamlChange,
   configLoading,
   hasValidSources,
   handleGenerate,
@@ -124,6 +154,17 @@ export function HomeLayout({
     setConfigTab(nextMode);
     interactions.modeChanged?.({ mode: nextMode });
   }, [interactions]);
+
+  // 预览里显示的 YAML：手动改过就显示改过的版本，否则显示生成结果。
+  const previewYaml = editedYaml ?? generatedYaml;
+  const hasYamlToEdit = Boolean(generatedYaml) && !generatedYamlError;
+
+  const handleYamlEditorKeyDown = React.useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      handleYamlEditorTabKeyDown(event, previewYaml, onEditedYamlChange);
+    },
+    [onEditedYamlChange, previewYaml]
+  );
 
   return (
     <div className="w-full max-w-[clamp(1200px,95vw,2400px)] mx-auto px-4 sm:px-6 lg:px-8 xl:px-12 py-3 lg:py-5 [@media(max-height:1000px)]:py-3 min-h-[calc(100vh-64px)] flex flex-col">
@@ -269,8 +310,37 @@ export function HomeLayout({
                 </div>
               </CardHeader>
               <CardContent className={`pt-0 relative lg:flex-1 lg:overflow-hidden ${DESKTOP_PANEL_CONTENT_MIN_HEIGHT_CLASS}`}>
-                <TabsContent value="yaml" className="mt-0 data-[state=inactive]:hidden lg:absolute lg:inset-0">
-                  <div className="h-[clamp(420px,70vh,820px)] lg:h-full rounded-xl bg-code-panel border border-code-panel-border overflow-auto custom-scrollbar">
+                <TabsContent value="yaml" className="mt-0 flex flex-col gap-2 data-[state=inactive]:hidden lg:absolute lg:inset-0">
+                  {hasYamlToEdit && (
+                    <div className="flex flex-shrink-0 items-center justify-end gap-2">
+                      {editedYaml !== null && (
+                        <span className="rounded-full border border-amber-400/40 bg-amber-400/10 px-2 py-0.5 text-[11px] text-amber-200">
+                          已编辑
+                        </span>
+                      )}
+                      {editedYaml !== null && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => onEditedYamlChange(null)}
+                          className="h-7 px-2 text-xs"
+                        >
+                          恢复生成结果
+                        </Button>
+                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onIsEditingYamlChange(!isEditingYaml)}
+                        className="h-7 px-2 text-xs"
+                      >
+                        {isEditingYaml ? "完成" : "编辑"}
+                      </Button>
+                    </div>
+                  )}
+                  <div className="h-[clamp(420px,70vh,820px)] lg:h-auto lg:min-h-0 lg:flex-1 rounded-xl bg-code-panel border border-code-panel-border overflow-auto custom-scrollbar">
                     {/* 代码面板在浅色主题下也保持深色，内部按深色变量取色 */}
                     <div data-theme="dark" className="contents">
                     {generatedYamlError ? (
@@ -285,8 +355,18 @@ export function HomeLayout({
                           </div>
                         </div>
                       </div>
+                    ) : isEditingYaml && hasYamlToEdit ? (
+                      <textarea
+                        value={previewYaml}
+                        onChange={(event) => onEditedYamlChange(event.target.value)}
+                        onKeyDown={handleYamlEditorKeyDown}
+                        spellCheck={false}
+                        wrap="off"
+                        aria-label="编辑生成的 YAML"
+                        className="h-full w-full resize-none overflow-auto bg-transparent p-4 font-mono text-xs leading-relaxed text-slate-100 outline-none"
+                      />
                     ) : generatedYaml ? (
-                      <YamlHighlight content={generatedYaml} className="h-full" />
+                      <YamlHighlight content={previewYaml} className="h-full" />
                     ) : (
                       <pre className="p-4 font-mono text-xs text-fg-60 whitespace-pre">
                         {`# 请先添加订阅或节点
