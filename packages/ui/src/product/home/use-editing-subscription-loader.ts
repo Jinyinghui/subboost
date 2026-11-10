@@ -559,6 +559,13 @@ export function useEditingSubscriptionLoader({
 
         useConfigStore.getState().generateConfig();
 
+        // 该订阅保存时带过手动改过的 YAML：还原到预览里（generateConfig 会清掉编辑，所以放它后面）。
+        const editedYamlFromCfg =
+          typeof cfg.editedYaml === "string" && cfg.editedYaml.trim() ? (cfg.editedYaml as string) : null;
+        if (editedYamlFromCfg) {
+          useConfigStore.getState().setEditedYaml(editedYamlFromCfg);
+        }
+
         if (!cancelled) {
           const autoUpdateInterval =
             typeof sub.autoUpdateInterval === "number" &&

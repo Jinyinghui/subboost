@@ -66,6 +66,7 @@ type Options = {
   clearUser: () => void;
   subscriptionAdapter?: HomeSubscriptionAdapter;
   generatedYaml: string;
+  editedYaml: string | null;
   editingSubscription: EditingSubscription | null;
   setEditingSubscription: (subscription: EditingSubscription | null) => void;
   appliedTemplateId: string | null;
@@ -101,6 +102,7 @@ export function useSubscriptionLink({
   clearUser,
   subscriptionAdapter,
   generatedYaml,
+  editedYaml,
   editingSubscription,
   setEditingSubscription,
   appliedTemplateId,
@@ -149,6 +151,8 @@ export function useSubscriptionLink({
   const interactions = useProductInteractionAdapter();
 
   const isEditingExistingSubscription = Boolean(editingSubscription);
+  // 只有非空字符串才算一次手动编辑：undefined/空串都不进订阅（也避免旧脚手架没传该字段时误判）。
+  const hasEditedYaml = typeof editedYaml === "string" && editedYaml.trim() !== "";
   const loginHref = subscriptionAdapter?.loginHref ?? "/login";
   const trackSubscriptionMutation = React.useCallback((result: ProductInteractionResult) => {
     interactions.subscriptionLinkSaved?.({
@@ -405,6 +409,9 @@ export function useSubscriptionLink({
             cnIpNoResolve,
             experimentalCnUseCnRuleSet,
             autoSelectStrategy: "url-test",
+            // 预览里手动改过的 YAML：保存后订阅直接下发这个版本；没改过就不带该字段，
+            // 重新保存时旧的手动版本会被清掉、恢复按结构化配置生成。
+            ...(hasEditedYaml ? { editedYaml } : {}),
           },
         };
 
@@ -481,6 +488,8 @@ export function useSubscriptionLink({
     deletedNodes,
     dialerProxyGroups,
     dnsYaml,
+    editedYaml,
+    hasEditedYaml,
     editingSubscription,
     enabledProxyGroups,
     hiddenProxyGroups,
@@ -543,6 +552,7 @@ export function useSubscriptionLink({
     saveRequirementDialog,
     setSaveRequirementDialog,
     isEditingExistingSubscription,
+    hasEditedYaml,
 
     // actions
     handleGenerateSubscription,

@@ -333,6 +333,37 @@ describe("useEditingSubscriptionLoader", () => {
     expect(options.setCopied).toHaveBeenCalledWith(false);
   });
 
+  it("restores a manually edited YAML after regenerating the config", async () => {
+    const setEditedYaml = vi.fn();
+    const { generateConfig } = resetStoreState({ setEditedYaml });
+    const editedYaml = "proxies:\n  - name: Node A\n";
+    const options = makeOptions({
+      loadSubscription: vi.fn(async () =>
+        response(200, {
+          subscription: {
+            id: "sub-1",
+            token: "token-1",
+            name: "Saved",
+            autoUpdateInterval: null,
+            urls: [],
+            nodes: [],
+            config: { editedYaml },
+          },
+        })
+      ),
+    });
+
+    useEditingSubscriptionLoader(options);
+    await flushAsync();
+
+    expect(generateConfig).toHaveBeenCalled();
+    expect(setEditedYaml).toHaveBeenCalledWith(editedYaml);
+    // 还原必须在 generateConfig 之后，否则会被清掉。
+    expect(setEditedYaml.mock.invocationCallOrder[0]).toBeGreaterThan(
+      generateConfig.mock.invocationCallOrder[0]
+    );
+  });
+
   it("falls back to URL sources when config sources are absent", async () => {
     const options = makeOptions({
       loadSubscription: vi.fn(async () =>

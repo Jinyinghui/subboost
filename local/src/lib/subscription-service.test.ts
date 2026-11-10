@@ -672,4 +672,39 @@ describe("local subscription service", () => {
     mocks.buildProxyProvidersFromConfig.mockReturnValueOnce({ provider: { url: "https://example.com/provider.yaml" } });
     await expect(generateSubscriptionYaml("provider-only")).resolves.toMatchObject({ yaml: "mixed-port: 7890\n" });
   });
+
+  it("serves a manually edited YAML as-is without regenerating", async () => {
+    const editedYaml = "proxies:\n  - name: Node A\n";
+    mocks.prisma.subscription.findUnique.mockResolvedValueOnce(
+      row({
+        encryptedConfig: JSON.stringify({
+          sources: [{ id: "source-1", type: "url", content: "https://example.com/sub" }],
+          editedYaml,
+        }),
+      })
+    );
+    await expect(generateSubscriptionYaml("token-1")).resolves.toMatchObject({
+      yaml: editedYaml,
+      name: "Saved",
+      cacheExpirySeconds: 3600,
+      autoUpdateIntervalSeconds: 86400,
+      isAdmin: true,
+    });
+    expect(mocks.generateClashYaml).not.toHaveBeenCalled();
+    expect(mocks.buildGenerateOptionsFromConfig).not.toHaveBeenCalled();
+    expect(mocks.prisma.subscription.update).toHaveBeenCalledWith({
+      where: { id: "sub-1" },
+      data: { lastAccessedAt: expect.any(Date) },
+    });
+
+    // 即使没有节点、没有 proxy provider，手动版本也照常下发。
+    mocks.prisma.subscription.findUnique.mockResolvedValueOnce(
+      row({
+        encryptedNodes: JSON.stringify([]),
+        encryptedConfig: JSON.stringify({ editedYaml }),
+      })
+    );
+    await expect(generateSubscriptionYaml("token-1")).resolves.toMatchObject({ yaml: editedYaml });
+    expect(mocks.generateClashYaml).not.toHaveBeenCalled();
+  });
 });

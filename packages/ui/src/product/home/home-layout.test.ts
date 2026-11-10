@@ -143,6 +143,7 @@ function createSubscription(overrides: Record<string, unknown> = {}) {
     saveRequirementDialog: false,
     setSaveRequirementDialog: vi.fn(),
     isEditingExistingSubscription: false,
+    hasEditedYaml: false,
     handleGenerateSubscription: vi.fn(),
     handleAcceptSaveRequirement: vi.fn(),
     handleCreateSubscription: vi.fn(),

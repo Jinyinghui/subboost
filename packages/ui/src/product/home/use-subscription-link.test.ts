@@ -275,6 +275,38 @@ describe("useSubscriptionLink", () => {
     );
   });
 
+  it("includes the manually edited YAML in the saved config", async () => {
+    const adapter = makeAdapter();
+    const editedYaml = "proxies:\n  - name: Node A\n";
+    let hook = useRenderedHook({ subscriptionAdapter: adapter, editedYaml });
+    hook.setSubscriptionName("Edited Sub");
+    hook = useRenderedHook({ subscriptionAdapter: adapter, editedYaml });
+
+    expect(hook.hasEditedYaml).toBe(true);
+    await hook.handleCreateSubscription();
+
+    expect(adapter.saveSubscription).toHaveBeenCalledWith(
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          config: expect.objectContaining({ editedYaml }),
+        }),
+      })
+    );
+  });
+
+  it("omits editedYaml from the saved config when the preview was not edited", async () => {
+    const adapter = makeAdapter();
+    let hook = useRenderedHook({ subscriptionAdapter: adapter });
+    hook.setSubscriptionName("Plain Sub");
+    hook = useRenderedHook({ subscriptionAdapter: adapter });
+
+    expect(hook.hasEditedYaml).toBe(false);
+    await hook.handleCreateSubscription();
+
+    const payload = (adapter.saveSubscription as any).mock.calls[0][0].payload;
+    expect(payload.config).not.toHaveProperty("editedYaml");
+  });
+
   it.each(["success", "unauthorized", "rejected"])("ignores a late %s save after the draft is reset", async (kind) => {
     const clearUser = vi.fn();
     const adapter = makeAdapter({ saveSubscription: vi.fn(async () => {

@@ -53,6 +53,7 @@ type SubscriptionLinkState = {
   saveRequirementDialog: boolean;
   setSaveRequirementDialog: (open: boolean) => void;
   isEditingExistingSubscription: boolean;
+  hasEditedYaml: boolean;
   handleGenerateSubscription: (mode: ProductMode) => void;
   handleAcceptSaveRequirement: () => void;
   handleCreateSubscription: () => void;
@@ -469,6 +470,7 @@ export function HomeLayout({
         isCreatingSubscription={subscription.isCreatingSubscription}
         copied={subscription.copied}
         isEditingExistingSubscription={subscription.isEditingExistingSubscription}
+        hasEditedYaml={subscription.hasEditedYaml}
         handleCopyUrl={subscription.handleCopyUrl}
         handleCreateSubscription={subscription.handleCreateSubscription}
       />

@@ -39,6 +39,7 @@ type Props = {
   isCreatingSubscription: boolean;
   copied: boolean;
   isEditingExistingSubscription: boolean;
+  hasEditedYaml: boolean;
   handleCopyUrl: () => void;
   handleCreateSubscription: () => void;
 };
@@ -59,6 +60,7 @@ export function SubscriptionLinkDialog({
   isCreatingSubscription,
   copied,
   isEditingExistingSubscription,
+  hasEditedYaml,
   handleCopyUrl,
   handleCreateSubscription,
 }: Props) {
@@ -149,6 +151,9 @@ export function SubscriptionLinkDialog({
                   </>
                 ) : (
                   <li>🗑️ 您可以随时在仪表盘删除订阅</li>
+                )}
+                {hasEditedYaml && (
+                  <li>✏️ 已手动编辑过预览 YAML：保存后订阅将直接下发改过的版本，之后改分组/规则不会影响它，直到重新保存且没有手动编辑</li>
                 )}
               </ul>
             </div>

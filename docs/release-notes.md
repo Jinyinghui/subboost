@@ -1,3 +1,17 @@
+# SubBoost v2.11.18
+
+## 中文
+
+- 预览里手动改过的 YAML 现在能进订阅了：保存订阅时，改过的版本会随配置一起存下来，订阅链接直接下发改过的 YAML（冻结快照），而不是按结构化配置重新生成。保存对话框的注意事项里会提示这一点。
+- 行为说明：改过一次后，之后改分组/规则不会影响已保存的订阅，直到重新保存且没有手动编辑（那次保存会清掉手动版本、恢复按结构化配置生成）。自动更新刷新节点时手动版本会保留，仍下发改过的 YAML。
+- 编辑已保存的订阅时，预览会还原成当时手动改过的版本；改了结构化配置后预览重新生成，手动版本随之清掉（和 2.11.17 的预览规则一致）。
+
+## English
+
+- A manually edited preview YAML now flows into saved subscriptions: when you save a subscription, the edited version is stored with the config and the subscription link serves it as-is (a frozen snapshot) instead of regenerating from the structured config. The save dialog notes this.
+- Semantics: once saved with edits, later group/rule changes do not affect the saved subscription until you re-save without manual edits (that save clears the edited version and restores generation from the structured config). Auto-update node refreshes keep the edited version, which continues to be served.
+- Editing a saved subscription restores the preview to the previously edited YAML; changing the structured config regenerates the preview and clears the manual version (same rule as v2.11.17).
+
 # SubBoost v2.11.17
 
 ## 中文

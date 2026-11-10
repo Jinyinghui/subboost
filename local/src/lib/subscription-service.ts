@@ -447,6 +447,20 @@ export async function generateSubscriptionYaml(token: string): Promise<Generated
   const row = await prisma.subscription.findUnique({ where: { token }, include: { autoUpdateState: true } });
   if (!row) return null;
   const secrets = readSubscriptionSecrets(row);
+  // 手动改过的预览 YAML 直接下发（冻结快照）：不按结构化配置重新生成，
+  // 也不受节点是否为空影响；自动更新刷新节点时该字段会随配置一起保留。
+  const editedYaml = typeof secrets.config.editedYaml === "string" ? secrets.config.editedYaml : "";
+  if (editedYaml.trim()) {
+    await prisma.subscription.update({ where: { id: row.id }, data: { lastAccessedAt: new Date() } });
+    return {
+      yaml: editedYaml,
+      name: row.name,
+      subscriptionInfo: secrets.subscriptionInfo,
+      cacheExpirySeconds: CACHE_TTL_SECONDS,
+      autoUpdateIntervalSeconds: row.autoUpdateInterval,
+      isAdmin: true,
+    };
+  }
   const { testUrl, testInterval } = getEffectiveTestOptions(secrets.config);
   const proxyProviders = buildProxyProvidersFromConfig(secrets.config, { testUrl, testInterval });
   if (secrets.nodes.length === 0 && !proxyProviders) return null;

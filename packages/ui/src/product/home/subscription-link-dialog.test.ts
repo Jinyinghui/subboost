@@ -111,6 +111,7 @@ const baseProps = {
   isCreatingSubscription: false,
   copied: false,
   isEditingExistingSubscription: false,
+  hasEditedYaml: false,
   user: baseUser,
   handleCopyUrl: vi.fn(),
   handleCreateSubscription: vi.fn(),
@@ -143,6 +144,7 @@ describe("SubscriptionLinkDialog", () => {
     expect(html).toContain("注意事项");
     expect(html).toContain("订阅链接相当于访问凭证，请勿公开分享");
     expect(html).toContain("客户端高频拉取订阅会被封禁，请合理配置");
+    expect(html).not.toContain("已手动编辑过预览 YAML");
     expect(captures.inputs[0]).toMatchObject({ value: "我的配置", maxLength: 100 });
     expect(captures.inputs[1]).toMatchObject({ type: "number", min: 12, step: 1, value: 8 });
     expect(captures.switches).toHaveLength(2);
@@ -158,6 +160,17 @@ describe("SubscriptionLinkDialog", () => {
     expect(baseProps.setSmartNodeMatchingEnabled).toHaveBeenCalledWith(false);
     expect(baseProps.setAutoUpdateEnabled).toHaveBeenCalledWith(false);
     expect(baseProps.handleCreateSubscription).toHaveBeenCalled();
+  });
+
+  it("warns that a manually edited preview will be served as-is", () => {
+    const html = renderToStaticMarkup(
+      React.createElement(SubscriptionLinkDialog, {
+        ...baseProps,
+        hasEditedYaml: true,
+      })
+    );
+
+    expect(html).toContain("已手动编辑过预览 YAML：保存后订阅将直接下发改过的版本");
   });
 
   it("renders generated links and copy/finish actions", () => {

@@ -33,6 +33,7 @@ export function makeOptions(overrides: Record<string, unknown> = {}) {
     clearUser: vi.fn(),
     subscriptionAdapter: makeAdapter(),
     generatedYaml: "proxies: []",
+    editedYaml: null,
     editingSubscription: null,
     setEditingSubscription: vi.fn(),
     appliedTemplateId: "template-1",

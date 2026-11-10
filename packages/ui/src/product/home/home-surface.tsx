@@ -102,6 +102,7 @@ function HomeSurfaceInner({ adapter }: Props) {
     clearUser,
     subscriptionAdapter: adapter?.subscription,
     generatedYaml,
+    editedYaml,
     editingSubscription,
     setEditingSubscription,
     appliedTemplateId,
