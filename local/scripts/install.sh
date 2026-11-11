@@ -674,7 +674,7 @@ main() {
   fi
   ENV_FILE="$live_env"
   COMPOSE_FILE="$live_compose"
-  run_root "$SUBBOOST_BIN" ensure-update-watcher || true
+  run_root "$SUBBOOST_BIN" ensure-update-services || true
 
   say ""
   say "SubBoost 已启动。"

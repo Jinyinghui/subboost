@@ -2,7 +2,11 @@ import { withCurrentAdmin } from "@local/lib/api-auth";
 import { apiError, json } from "@local/lib/http";
 import {
   fetchLatestRelease,
+  readAutoUpdateSetting,
+  readPrepullStatus,
+  readUpdateHistory,
   readUpdateStatus,
+  requestPrepull,
   requestSelfUpdate,
   SelfUpdateError,
 } from "@local/lib/self-update";
@@ -10,10 +14,38 @@ import {
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  return withCurrentAdmin(async () => {
+  return withCurrentAdmin(async (admin) => {
     const latest = await fetchLatestRelease({ fresh: true });
     const { watcherEnabled, status } = readUpdateStatus();
-    return json({ ...latest, watcherEnabled, status });
+    const { prepullWatcherEnabled, prepull } = readPrepullStatus();
+    const history = readUpdateHistory();
+    const autoUpdateEnabled = readAutoUpdateSetting();
+    // 新版已出、后台还没拉、又没有更新在跑时，顺手提交一次后台拉取
+    // （幂等：同一版本已提交/拉取中/已就绪时直接返回，不重复提交）。
+    let currentPrepull = prepull;
+    if (
+      latest.hasUpdate &&
+      latest.latestVersion &&
+      prepullWatcherEnabled &&
+      status.state !== "requested" &&
+      status.state !== "running" &&
+      (prepull.state === "idle" || prepull.state === "failed")
+    ) {
+      try {
+        currentPrepull = requestPrepull(admin.id, latest.latestVersion);
+      } catch {
+        // Best effort: 后台拉取只是加速，失败不影响状态查询。
+      }
+    }
+    return json({
+      ...latest,
+      watcherEnabled,
+      prepullWatcherEnabled,
+      status,
+      prepull: currentPrepull,
+      history,
+      autoUpdateEnabled,
+    });
   });
 }
 

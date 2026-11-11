@@ -874,4 +874,267 @@ ENV
       expect(result.stdout).toContain("unsafe_files=0 unsafe_dirs=0");
     }
   });
+
+  it("prunes old images while keeping the current and previous ones", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      source local/scripts/subboost.sh
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      removed_file="$home/removed"
+      : > "$removed_file"
+      docker_cmd() {
+        case "$1" in
+          inspect) printf 'sha256:current-id\\n' ;;
+          ps) printf 'ghcr.io/jinyinghui/subboost:v2.11.20\\n' ;;
+          images)
+            printf 'sha256:current-id ghcr.io/jinyinghui/subboost:v2.11.20\\n'
+            printf 'sha256:prev-id ghcr.io/jinyinghui/subboost:v2.11.19\\n'
+            printf 'sha256:old-id ghcr.io/jinyinghui/subboost:v2.11.18\\n'
+            printf 'sha256:older-id ghcr.io/jinyinghui/subboost:v2.11.17\\n'
+            ;;
+          image) printf 'removed=%s\\n' "$3" >> "$removed_file" ;;
+        esac
+        return 0
+      }
+      prune_old_images "ghcr.io/jinyinghui/subboost:v2.11.20" "sha256:prev-id"
+      cat "$removed_file"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("removed=sha256:old-id");
+    expect(result.stdout).toContain("removed=sha256:older-id");
+    expect(result.stdout).not.toContain("removed=sha256:current-id");
+    expect(result.stdout).not.toContain("removed=sha256:prev-id");
+    expect(result.stdout).toContain("Pruned old image: ghcr.io/jinyinghui/subboost:v2.11.18");
+  });
+
+  it("appends update history newest-first and caps the entries", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      source local/scripts/subboost.sh
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      OPS_DIR="$home/ops"
+      OPS_HISTORY_FILE="$OPS_DIR/update-history.json"
+      UPDATE_HISTORY_MAX_ENTRIES=3
+      mkdir -p "$OPS_DIR"
+      sudo_do() { "$@"; }
+      ops_append_history "2.11.19" "2.11.20" "succeeded" "2026-11-11T06:00:00Z" "2026-11-11T06:05:00Z" "更新完成"
+      ops_append_history "2.11.18" "2.11.19" "failed" "2026-11-10T08:45:00Z" "2026-11-10T09:30:00Z" "更新失败（exit 1）"
+      ops_append_history "2.11.17" "2.11.18" "succeeded" "2026-11-10T06:00:00Z" "2026-11-10T06:05:00Z" "更新完成"
+      ops_append_history "2.11.16" "2.11.17" "succeeded" "2026-11-09T06:00:00Z" "2026-11-09T06:05:00Z" "更新完成"
+      cat "$OPS_HISTORY_FILE"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    // 4 次追加、上限 3 条：最早那条（2.11.20）被挤掉，剩下 3 条按最新在前排列。
+    expect(result.stdout).toContain('"targetVersion": "2.11.19"');
+    expect(result.stdout).toContain('"targetVersion": "2.11.18"');
+    expect(result.stdout).toContain('"targetVersion": "2.11.17"');
+    expect(result.stdout).not.toContain('"targetVersion": "2.11.20"');
+    expect(result.stdout.indexOf('"targetVersion": "2.11.17"')).toBeLessThan(
+      result.stdout.indexOf('"targetVersion": "2.11.18"')
+    );
+  });
+
+  it("auto-update check requests an update when enabled and a newer version exists", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      export SUBBOOST_HOME="$home"
+      mkdir -p "$home/ops"
+      cat > "$home/.env" <<'ENV'
+SUBBOOST_IMAGE=ghcr.io/jinyinghui/subboost:v2.11.19
+SUBBOOST_RELEASE_URL=file://$home/release.json
+ENV
+      cat > "$home/release.json" <<'JSON'
+{"version": "2.11.20", "image": "ghcr.io/jinyinghui/subboost:v2.11.20"}
+JSON
+      printf '{"enabled": true}\\n' > "$home/ops/auto-update.json"
+      source local/scripts/subboost.sh
+      auto_update_check
+      printf 'update-request=%s\\n' "$(test -f "$home/ops/update-requested.json" && echo yes || echo no)"
+      printf 'prepull-request=%s\\n' "$(test -f "$home/ops/prepull-requested.json" && echo yes || echo no)"
+      cat "$home/ops/update-requested.json"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("update-request=yes");
+    expect(result.stdout).toContain("prepull-request=no");
+    expect(result.stdout).toContain('"targetVersion":"2.11.20"');
+  });
+
+  it("auto-update check only pre-pulls when auto-update is disabled", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      export SUBBOOST_HOME="$home"
+      mkdir -p "$home/ops"
+      cat > "$home/.env" <<'ENV'
+SUBBOOST_IMAGE=ghcr.io/jinyinghui/subboost:v2.11.19
+SUBBOOST_RELEASE_URL=file://$home/release.json
+ENV
+      cat > "$home/release.json" <<'JSON'
+{"version": "2.11.20", "image": "ghcr.io/jinyinghui/subboost:v2.11.20"}
+JSON
+      printf '{"enabled": false}\\n' > "$home/ops/auto-update.json"
+      source local/scripts/subboost.sh
+      auto_update_check
+      printf 'update-request=%s\\n' "$(test -f "$home/ops/update-requested.json" && echo yes || echo no)"
+      printf 'prepull-request=%s\\n' "$(test -f "$home/ops/prepull-requested.json" && echo yes || echo no)"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("update-request=no");
+    expect(result.stdout).toContain("prepull-request=yes");
+  });
+
+  it("auto-update check does nothing when already on the latest version", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      export SUBBOOST_HOME="$home"
+      mkdir -p "$home/ops"
+      cat > "$home/.env" <<'ENV'
+SUBBOOST_IMAGE=ghcr.io/jinyinghui/subboost:v2.11.20
+SUBBOOST_RELEASE_URL=file://$home/release.json
+ENV
+      cat > "$home/release.json" <<'JSON'
+{"version": "2.11.20", "image": "ghcr.io/jinyinghui/subboost:v2.11.20"}
+JSON
+      printf '{"enabled": true}\\n' > "$home/ops/auto-update.json"
+      source local/scripts/subboost.sh
+      auto_update_check
+      printf 'update-request=%s\\n' "$(test -f "$home/ops/update-requested.json" && echo yes || echo no)"
+      printf 'prepull-request=%s\\n' "$(test -f "$home/ops/prepull-requested.json" && echo yes || echo no)"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("update-request=no");
+    expect(result.stdout).toContain("prepull-request=no");
+  });
+
+  it("pre-pull request pulls the target image and records a ready status", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      export SUBBOOST_HOME="$home"
+      mkdir -p "$home/ops"
+      cat > "$home/.env" <<'ENV'
+SUBBOOST_IMAGE=ghcr.io/jinyinghui/subboost:v2.11.19
+SUBBOOST_RELEASE_URL=file://$home/release.json
+ENV
+      cat > "$home/release.json" <<'JSON'
+{"version": "2.11.20", "image": "ghcr.io/jinyinghui/subboost:v2.11.20", "composeUrl": "candidate-compose.yml"}
+JSON
+      cat > "$home/candidate-compose.yml" <<'YAML'
+services:
+  app:
+    image: \${SUBBOOST_IMAGE}
+YAML
+      printf '{"requestedAt":"2026-11-11T07:00:00Z","requestedBy":"admin-1","targetVersion":"2.11.20"}\\n' > "$home/ops/prepull-requested.json"
+      source local/scripts/subboost.sh
+      sudo_do() { "$@"; }
+      docker_cmd() {
+        printf 'docker-call=%s\\n' "$*"
+        return 0
+      }
+      run_prepull_request
+      cat "$home/ops/prepull-status.json"
+      cat "$home/ops/update.log"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("docker-call=compose");
+    expect(result.stdout).toContain("pull");
+    expect(result.stdout).toContain('"state": "ready"');
+    expect(result.stdout).toContain('"targetVersion": "2.11.20"');
+    expect(result.stdout).toContain('"imageTag": "ghcr.io/jinyinghui/subboost:v2.11.20"');
+  });
+
+  it("installs the pre-pull watcher and auto-update timer units", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      source local/scripts/subboost.sh
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      OPS_DIR="$home/ops"
+      OPS_PREPULL_REQUEST_FILE="$OPS_DIR/prepull-requested.json"
+      OPS_PREPULL_WATCHER_FILE="$OPS_DIR/prepull-watcher.json"
+      PREPULL_WATCHER_PATH_UNIT="$home/prepull-watcher.path"
+      PREPULL_WATCHER_SERVICE_UNIT="$home/prepull-watcher.service"
+      AUTO_UPDATE_TIMER_UNIT="$home/auto-update.timer"
+      AUTO_UPDATE_SERVICE_UNIT="$home/auto-update.service"
+      sudo_do() { "$@"; }
+      systemctl() { printf 'systemctl-call=%s\\n' "$*"; return 0; }
+      ensure_prepull_watcher
+      ensure_auto_update_timer
+      printf 'prepull-service=%s\\n' "$(grep -c 'run-prepull-request' "$home/prepull-watcher.service")"
+      printf 'timer-calendar=%s\\n' "$(grep -c 'OnCalendar=Sun 03:00' "$home/auto-update.timer")"
+      printf 'timer-service=%s\\n' "$(grep -c 'auto-update-check' "$home/auto-update.service")"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("prepull-service=1");
+    expect(result.stdout).toContain("timer-calendar=1");
+    expect(result.stdout).toContain("timer-service=1");
+    expect(result.stdout).toContain("systemctl-call=daemon-reload");
+    expect(result.stdout).toContain("systemctl-call=enable --now subboost-prepull-watcher.path");
+    expect(result.stdout).toContain("systemctl-call=enable --now subboost-auto-update.timer");
+  });
+
+  it("records a failed pre-pull when the manifest cannot be downloaded", () => {
+    const script = `
+      set -Eeuo pipefail
+      export SUBBOOST_SCRIPT_SOURCE_ONLY=1
+      home="$(mktemp -d)"
+      trap 'rm -rf "$home"' EXIT
+      export SUBBOOST_HOME="$home"
+      mkdir -p "$home/ops"
+      cat > "$home/.env" <<'ENV'
+SUBBOOST_IMAGE=ghcr.io/jinyinghui/subboost:v2.11.19
+SUBBOOST_RELEASE_URL=https://example.com/release.json
+ENV
+      printf '{"requestedAt":"2026-11-11T07:00:00Z","requestedBy":"admin-1","targetVersion":"2.11.20"}\\n' > "$home/ops/prepull-requested.json"
+      source local/scripts/subboost.sh
+      sudo_do() { "$@"; }
+      curl() { return 22; }
+      sleep() { :; }
+      if run_prepull_request; then printf 'unexpected-success\\n'; else printf 'failed-as-expected\\n'; fi
+      cat "$home/ops/prepull-status.json"
+    `;
+
+    const result = runBash(script);
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain("failed-as-expected");
+    expect(result.stdout).not.toContain("unexpected-success");
+    expect(result.stdout).toContain('"state": "failed"');
+  });
 });

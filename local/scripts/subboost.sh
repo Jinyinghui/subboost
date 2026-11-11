@@ -19,6 +19,18 @@ OPS_WATCHER_FILE="$OPS_DIR/watcher.json"
 OPS_UPDATE_LOG="$OPS_DIR/update.log"
 UPDATE_WATCHER_PATH_UNIT="/etc/systemd/system/subboost-update-watcher.path"
 UPDATE_WATCHER_SERVICE_UNIT="/etc/systemd/system/subboost-update-watcher.service"
+# 后台预拉取：网站发现新版时先把镜像拉好，点更新时只做切换。
+OPS_PREPULL_REQUEST_FILE="$OPS_DIR/prepull-requested.json"
+OPS_PREPULL_STATUS_FILE="$OPS_DIR/prepull-status.json"
+OPS_PREPULL_WATCHER_FILE="$OPS_DIR/prepull-watcher.json"
+PREPULL_WATCHER_PATH_UNIT="/etc/systemd/system/subboost-prepull-watcher.path"
+PREPULL_WATCHER_SERVICE_UNIT="/etc/systemd/system/subboost-prepull-watcher.service"
+# 更新记录（网站只读）与定时自动更新开关（网站写，定时任务读）。
+OPS_HISTORY_FILE="$OPS_DIR/update-history.json"
+OPS_AUTO_UPDATE_FILE="$OPS_DIR/auto-update.json"
+UPDATE_HISTORY_MAX_ENTRIES="20"
+AUTO_UPDATE_TIMER_UNIT="/etc/systemd/system/subboost-auto-update.timer"
+AUTO_UPDATE_SERVICE_UNIT="/etc/systemd/system/subboost-auto-update.service"
 # UID of the `node` user the app container runs as (official node image).
 OPS_APP_UID="1000"
 
@@ -455,6 +467,101 @@ ops_write_status() {
     || sudo_do chmod 0666 "$OPS_STATUS_FILE" || true
 }
 
+# Write the website-visible pre-pull status atomically. Same ownership rule
+# as ops_write_status: the site (uid OPS_APP_UID) and the host updater (root)
+# take turns writing it.
+ops_write_prepull_status() {
+  local state="$1" message="${2:-}" target_version="${3:-}" image_tag="${4:-}"
+  local tmp_status="$OPS_PREPULL_STATUS_FILE.tmp.$$"
+  {
+    printf '{\n'
+    printf '  "state": "%s",\n' "$(json_escape "$state")"
+    printf '  "targetVersion": "%s",\n' "$(json_escape "$target_version")"
+    printf '  "imageTag": "%s",\n' "$(json_escape "$image_tag")"
+    printf '  "message": "%s",\n' "$(json_escape "$message")"
+    printf '  "updatedAt": "%s"\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    printf '}\n'
+  } > "$tmp_status"
+  sudo_do mv "$tmp_status" "$OPS_PREPULL_STATUS_FILE"
+  sudo_do chown "$OPS_APP_UID:$OPS_APP_UID" "$OPS_PREPULL_STATUS_FILE" 2>/dev/null \
+    || sudo_do chmod 0666 "$OPS_PREPULL_STATUS_FILE" || true
+}
+
+# Append one entry to the update history (newest first, capped). Best effort:
+# a history failure must never fail an update.
+ops_append_history() {
+  local from_version="$1" target_version="$2" state="$3" started_at="$4" finished_at="$5" message="$6"
+  local max_entries="${UPDATE_HISTORY_MAX_ENTRIES:-20}"
+  local tmp_history="$OPS_HISTORY_FILE.tmp.$$"
+  if command -v python3 >/dev/null 2>&1; then
+    UPDATE_HISTORY_FILE="$OPS_HISTORY_FILE" UPDATE_HISTORY_MAX="$max_entries" \
+    UPDATE_HISTORY_ENTRY_FROM="$from_version" UPDATE_HISTORY_ENTRY_TARGET="$target_version" \
+    UPDATE_HISTORY_ENTRY_STATE="$state" UPDATE_HISTORY_ENTRY_STARTED="$started_at" \
+    UPDATE_HISTORY_ENTRY_FINISHED="$finished_at" UPDATE_HISTORY_ENTRY_MESSAGE="$message" \
+    python3 - <<'PY' > "$tmp_history" 2>/dev/null || return 0
+import json
+import os
+path = os.environ["UPDATE_HISTORY_FILE"]
+try:
+    with open(path, "r", encoding="utf-8") as handle:
+        history = json.load(handle)
+except Exception:
+    history = []
+if not isinstance(history, list):
+    history = []
+entry = {
+    "fromVersion": os.environ.get("UPDATE_HISTORY_ENTRY_FROM") or None,
+    "targetVersion": os.environ.get("UPDATE_HISTORY_ENTRY_TARGET") or None,
+    "state": os.environ.get("UPDATE_HISTORY_ENTRY_STATE") or "",
+    "startedAt": os.environ.get("UPDATE_HISTORY_ENTRY_STARTED") or None,
+    "finishedAt": os.environ.get("UPDATE_HISTORY_ENTRY_FINISHED") or None,
+    "message": os.environ.get("UPDATE_HISTORY_ENTRY_MESSAGE") or None,
+}
+history.insert(0, entry)
+print(json.dumps(history[: int(os.environ.get("UPDATE_HISTORY_MAX", "20"))], ensure_ascii=False))
+PY
+  else
+    {
+      printf '[{"fromVersion": "%s", "targetVersion": "%s", "state": "%s", "startedAt": "%s", "finishedAt": "%s", "message": "%s"}]\n' \
+        "$(json_escape "$from_version")" "$(json_escape "$target_version")" "$(json_escape "$state")" \
+        "$(json_escape "$started_at")" "$(json_escape "$finished_at")" "$(json_escape "$message")"
+    } > "$tmp_history" 2>/dev/null || return 0
+  fi
+  sudo_do mv "$tmp_history" "$OPS_HISTORY_FILE" 2>/dev/null || return 0
+  sudo_do chown "$OPS_APP_UID:$OPS_APP_UID" "$OPS_HISTORY_FILE" 2>/dev/null \
+    || sudo_do chmod 0666 "$OPS_HISTORY_FILE" || true
+}
+
+# Remove local images of the same repository except the current one and the
+# previous one (kept for rollback). Best effort: never fail an update.
+prune_old_images() {
+  local current_ref="$1" keep_id="$2"
+  local repo="${current_ref%:*}"
+  local current_id=""
+  current_id="$(docker_cmd inspect -f '{{.Id}}' "$current_ref" 2>/dev/null || true)"
+  [ -n "$repo" ] || return 0
+  [ -n "$current_id" ] || return 0
+  local line image_id image_ref
+  local -a in_use_refs
+  mapfile -t in_use_refs < <(docker_cmd ps -a --format '{{.Image}}' 2>/dev/null || true)
+  while IFS= read -r line; do
+    [ -n "$line" ] || continue
+    image_id="${line%% *}"
+    image_ref="${line#* }"
+    [ -n "$image_id" ] || continue
+    if [ "$image_id" = "$current_id" ] || [ "$image_id" = "$keep_id" ]; then continue; fi
+    local ref_in_use=0 ref
+    for ref in "${in_use_refs[@]}"; do
+      if [ "$ref" = "$image_ref" ] || [ "$ref" = "$image_id" ]; then ref_in_use=1; break; fi
+    done
+    if [ "$ref_in_use" = "1" ]; then continue; fi
+    if docker_cmd image rm "$image_id" >/dev/null 2>&1; then
+      say "Pruned old image: $image_ref"
+    fi
+  done < <(docker_cmd images --format '{{.ID}} {{.Repository}}:{{.Tag}}' "$repo" 2>/dev/null || true)
+  return 0
+}
+
 ensure_update_watcher() {
   command -v systemctl >/dev/null 2>&1 || return 0
   sudo_do mkdir -p "$OPS_DIR" || return 0
@@ -485,6 +592,70 @@ EOF
   say "Update watcher installed: website updates enabled."
 }
 
+ensure_prepull_watcher() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  sudo_do mkdir -p "$OPS_DIR" || return 0
+  sudo_do chown "$OPS_APP_UID:$OPS_APP_UID" "$OPS_DIR" 2>/dev/null || sudo_do chmod 0777 "$OPS_DIR" || true
+  sudo_do rm -f "$OPS_PREPULL_REQUEST_FILE" || true
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  printf '{"installed":true,"installedAt":"%s"}\n' "$now" | sudo_do tee "$OPS_PREPULL_WATCHER_FILE" >/dev/null || return 0
+  sudo_do tee "$PREPULL_WATCHER_PATH_UNIT" >/dev/null <<EOF || return 0
+[Unit]
+Description=SubBoost pre-pull request watcher
+[Path]
+PathModified=$OPS_PREPULL_REQUEST_FILE
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo_do tee "$PREPULL_WATCHER_SERVICE_UNIT" >/dev/null <<EOF || return 0
+[Unit]
+Description=Pre-pull SubBoost image on request
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/subboost run-prepull-request
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo_do systemctl daemon-reload || return 0
+  sudo_do systemctl enable --now subboost-prepull-watcher.path || return 0
+  say "Pre-pull watcher installed: background image pre-pulls enabled."
+}
+
+ensure_auto_update_timer() {
+  command -v systemctl >/dev/null 2>&1 || return 0
+  sudo_do tee "$AUTO_UPDATE_TIMER_UNIT" >/dev/null <<EOF || return 0
+[Unit]
+Description=Weekly SubBoost update check
+[Timer]
+OnCalendar=Sun 03:00
+Persistent=true
+[Install]
+WantedBy=timers.target
+EOF
+  sudo_do tee "$AUTO_UPDATE_SERVICE_UNIT" >/dev/null <<EOF || return 0
+[Unit]
+Description=Check for a SubBoost update (and pre-pull or apply it)
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/subboost auto-update-check
+[Install]
+WantedBy=multi-user.target
+EOF
+  sudo_do systemctl daemon-reload || return 0
+  sudo_do systemctl enable --now subboost-auto-update.timer || return 0
+  say "Auto-update timer installed: weekly check on Sundays at 03:00."
+}
+
+# (Re)install all website-driven update services. Called on fresh installs
+# and at the end of every successful update, so existing installs pick the
+# new units up on the next update.
+ensure_update_services() {
+  ensure_update_watcher
+  ensure_prepull_watcher
+  ensure_auto_update_timer
+}
+
 run_update_request_locked() {
   OPS_REQUESTED_AT="$(json_get requestedAt "$OPS_REQUEST_FILE" || true)"
   OPS_REQUESTED_BY="$(json_get requestedBy "$OPS_REQUEST_FILE" || true)"
@@ -492,6 +663,10 @@ run_update_request_locked() {
   sudo_do rm -f "$OPS_REQUEST_FILE" || true
   OPS_STARTED_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   ops_write_status "running" "正在更新……"
+  local from_image="" from_version="" finished_at=""
+  from_image="$(grep '^SUBBOOST_IMAGE=' "$ENV_FILE" 2>/dev/null | head -n 1 | cut -d= -f2- | tr -d '[:space:]' || true)"
+  from_version="${from_image##*:}"
+  if [ "$from_version" = "$from_image" ]; then from_version=""; else from_version="${from_version#v}"; fi
   : >> "$OPS_UPDATE_LOG" 2>/dev/null || sudo_do touch "$OPS_UPDATE_LOG" || true
   local update_code=0
   if ( update_cmd ) >>"$OPS_UPDATE_LOG" 2>&1; then
@@ -500,10 +675,13 @@ run_update_request_locked() {
     update_code=$?
   fi
   tail -n 200 "$OPS_UPDATE_LOG" > "$OPS_UPDATE_LOG.tmp.$$" 2>/dev/null && sudo_do mv "$OPS_UPDATE_LOG.tmp.$$" "$OPS_UPDATE_LOG" || true
+  finished_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if [ "$update_code" = "0" ]; then
     ops_write_status "succeeded" "更新完成"
+    ops_append_history "$from_version" "$OPS_TARGET_VERSION" "succeeded" "$OPS_STARTED_AT" "$finished_at" "更新完成" || true
   else
     ops_write_status "failed" "更新失败（exit $update_code），请查看服务器 $OPS_UPDATE_LOG"
+    ops_append_history "$from_version" "$OPS_TARGET_VERSION" "failed" "$OPS_STARTED_AT" "$finished_at" "更新失败（exit $update_code）" || true
   fi
   return "$update_code"
 }
@@ -527,6 +705,151 @@ run_update_request() {
   ) || result=$?
   sudo_do rmdir "$lock_dir" 2>/dev/null || true
   return "$result"
+}
+
+# The pull step of an update, run early: download the manifest and the
+# candidate Compose, then pull the target image so a later update only swaps.
+# Runs in a subshell (via run_prepull_request_locked), so die() exits the
+# subshell and the wrapper can record the failure.
+prepull_cmd() {
+  load_env
+  local release_url="${SUBBOOST_RELEASE_URL:-}"
+  local release_file="$TMP_DIR/release.json"
+  local candidate_env="$TMP_DIR/candidate.env"
+  local candidate_compose="$TMP_DIR/candidate-compose.yml"
+  local image="" compose_url=""
+  mkdir -p "$TMP_DIR"
+  [ -n "$release_url" ] || die "No release URL configured; cannot pre-pull."
+  download_to_temp "$release_url" "$release_file" || die "Release manifest unavailable; pre-pull aborted."
+  image="$(json_get image "$release_file" || true)"
+  compose_url="$(resolve_url "$release_url" "$(json_get composeUrl "$release_file" || true)")"
+  [ -n "$image" ] && [ -n "$compose_url" ] || die "Release manifest is missing image or composeUrl."
+  download_to_temp "$compose_url" "$candidate_compose" || die "Candidate Compose unavailable; pre-pull aborted."
+  read_env_file > "$candidate_env"
+  set_file_env_value "$candidate_env" SUBBOOST_IMAGE "$image"
+  set_file_env_value "$candidate_env" SUBBOOST_CANDIDATE_IMAGE "$image"
+  compose_files_with_image "$image" "$candidate_env" "$candidate_compose" config >/dev/null || die "Candidate Compose is invalid."
+  say "Pre-pulling image $image ..."
+  compose_files_with_image "$image" "$candidate_env" "$candidate_compose" pull || die "Image pre-pull failed."
+  # TMP_DIR is removed by the EXIT trap when the subshell exits, so the
+  # resolved image has to travel back through OPS_DIR instead.
+  printf '%s\n' "$image" > "$OPS_DIR/.prepull-image"
+}
+
+run_prepull_request_locked() {
+  local target_version=""
+  target_version="$(json_get targetVersion "$OPS_PREPULL_REQUEST_FILE" || true)"
+  sudo_do rm -f "$OPS_PREPULL_REQUEST_FILE" || true
+  ops_write_prepull_status "pulling" "正在后台拉取镜像……" "$target_version" ""
+  : >> "$OPS_UPDATE_LOG" 2>/dev/null || sudo_do touch "$OPS_UPDATE_LOG" || true
+  local prepull_code=0 image=""
+  if ( prepull_cmd ) >>"$OPS_UPDATE_LOG" 2>&1; then
+    prepull_code=0
+  else
+    prepull_code=$?
+  fi
+  image="$(cat "$OPS_DIR/.prepull-image" 2>/dev/null || true)"
+  sudo_do rm -f "$OPS_DIR/.prepull-image" || true
+  if [ "$prepull_code" = "0" ]; then
+    ops_write_prepull_status "ready" "镜像已就绪，点立即更新时无需再下载" "$target_version" "$image"
+  else
+    ops_write_prepull_status "failed" "后台拉取失败（exit $prepull_code），请查看服务器 $OPS_UPDATE_LOG" "$target_version" "$image"
+  fi
+  return "$prepull_code"
+}
+
+run_prepull_request() {
+  [ -f "$OPS_PREPULL_REQUEST_FILE" ] || return 0
+  sudo_do mkdir -p "$OPS_DIR" || return 0
+  local lock_dir="$OPS_DIR/.prepull-lock"
+  if [ -d "$lock_dir" ]; then
+    if [ -n "$(find "$lock_dir" -maxdepth 0 -mmin +30 2>/dev/null)" ]; then
+      sudo_do rmdir "$lock_dir" 2>/dev/null || return 0
+    else
+      return 0
+    fi
+  fi
+  # 更新正在跑时不用预拉：更新本身就会拉同一份镜像。
+  if [ -d "$OPS_DIR/.update-lock" ]; then return 0; fi
+  sudo_do mkdir "$lock_dir" 2>/dev/null || return 0
+  local result=0
+  (
+    trap 'sudo_do rmdir "$lock_dir" 2>/dev/null || true' EXIT
+    run_prepull_request_locked
+  ) || result=$?
+  sudo_do rmdir "$lock_dir" 2>/dev/null || true
+  return "$result"
+}
+
+# Weekly timer entry point: check for a newer release. With auto-update on,
+# request the update; otherwise only request a background pre-pull so the
+# image is ready when the user clicks update. Always exits 0: a background
+# check must never report failure for a skipped or unavailable manifest.
+auto_update_check() {
+  [ -f "$ENV_FILE" ] || return 0
+  load_env
+  local release_url="${SUBBOOST_RELEASE_URL:-}"
+  local auto_enabled=""
+  auto_enabled="$(json_get enabled "$OPS_AUTO_UPDATE_FILE" 2>/dev/null || true)"
+  local release_file="$TMP_DIR/release.json"
+  local latest_version="" latest_image="" current_image="${SUBBOOST_IMAGE:-}" current_version=""
+  local status_state=""
+  mkdir -p "$TMP_DIR"
+  if [ -z "$release_url" ]; then
+    say "Auto-update check skipped: no release URL configured."
+    return 0
+  fi
+  if ! download_to_temp "$release_url" "$release_file" 2>/dev/null; then
+    say "Auto-update check skipped: release manifest unavailable."
+    return 0
+  fi
+  latest_version="$(json_get version "$release_file" || true)"
+  latest_image="$(json_get image "$release_file" || true)"
+  if [ -z "$latest_version" ] || [ -z "$latest_image" ]; then
+    say "Auto-update check skipped: release manifest is incomplete."
+    return 0
+  fi
+  if [ "$latest_image" = "$current_image" ]; then
+    say "Auto-update check: already on the latest version ($latest_version)."
+    return 0
+  fi
+  current_version="${current_image##*:}"
+  current_version="${current_version#v}"
+  latest_version="${latest_version#v}"
+  if [ -n "$current_version" ] && [ "$current_version" != "$current_image" ]; then
+    if [ "$(printf '%s\n%s\n' "$current_version" "$latest_version" | sort -V | tail -n 1)" = "$current_version" ]; then
+      say "Auto-update check: current version ($current_version) is newer than latest ($latest_version); skipping."
+      return 0
+    fi
+  fi
+  status_state="$(json_get state "$OPS_STATUS_FILE" 2>/dev/null || true)"
+  if [ "$status_state" = "requested" ] || [ "$status_state" = "running" ]; then
+    say "Auto-update check: an update is already in progress; skipping."
+    return 0
+  fi
+  local now
+  now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  case "$auto_enabled" in
+    true|True|1)
+      if [ -f "$OPS_REQUEST_FILE" ]; then
+        say "Auto-update check: an update request already exists; skipping."
+        return 0
+      fi
+      printf '{"requestedAt":"%s","requestedBy":"auto-update","targetVersion":"%s"}\n' "$now" "$(json_escape "$latest_version")" > "$OPS_REQUEST_FILE" 2>/dev/null || true
+      say "Auto-update check: new version $latest_version found; update requested."
+      printf '%s\n' "Auto-update check: new version $latest_version found; update requested." >> "$OPS_UPDATE_LOG" 2>/dev/null || true
+      ;;
+    *)
+      if [ -f "$OPS_PREPULL_REQUEST_FILE" ]; then
+        say "Auto-update check: a pre-pull request already exists; skipping."
+        return 0
+      fi
+      printf '{"requestedAt":"%s","requestedBy":"auto-update","targetVersion":"%s"}\n' "$now" "$(json_escape "$latest_version")" > "$OPS_PREPULL_REQUEST_FILE" 2>/dev/null || true
+      say "Auto-update check: new version $latest_version found; pre-pull requested."
+      printf '%s\n' "Auto-update check: new version $latest_version found; pre-pull requested." >> "$OPS_UPDATE_LOG" 2>/dev/null || true
+      ;;
+  esac
+  return 0
 }
 
 update_cmd() {
@@ -686,7 +1009,9 @@ update_cmd() {
   fi
 
   docker_cmd image rm "$rollback_tag" >/dev/null 2>&1 || true
-  ensure_update_watcher || true
+  # 成功后只留当前与上一个镜像（回滚用），其余旧镜像清掉。
+  prune_old_images "$image" "$old_image_id" || true
+  ensure_update_services || true
   load_env
   status_cmd
 }
@@ -791,7 +1116,12 @@ main() {
     status) status_cmd ;;
     update) update_cmd ;;
     ensure-update-watcher) ensure_update_watcher ;;
+    ensure-prepull-watcher) ensure_prepull_watcher ;;
+    ensure-auto-update-timer) ensure_auto_update_timer ;;
+    ensure-update-services) ensure_update_services ;;
     run-update-request) run_update_request ;;
+    run-prepull-request) run_prepull_request ;;
+    auto-update-check) auto_update_check ;;
     logs) logs_cmd "$@" ;;
     backup) backup_cmd ;;
     restart) restart_cmd ;;

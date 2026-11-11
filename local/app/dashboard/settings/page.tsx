@@ -9,6 +9,8 @@ import { SwitchField } from "@subboost/ui/components/ui/switch-field";
 import { useUserStore } from "@subboost/ui/store/user-store";
 
 import { UpdateLogPanel } from "./update-log-panel";
+import { UpdateHistoryList } from "./update-history-list";
+import { UpdatePrepullSection } from "./update-prepull-section";
 
 type SelfUpdateState = "idle" | "requested" | "running" | "succeeded" | "failed";
 
@@ -23,6 +25,23 @@ type SelfUpdateStatus = {
   logTail: string | null;
 };
 
+type PrepullStatus = {
+  state: "idle" | "requested" | "pulling" | "ready" | "failed";
+  targetVersion: string | null;
+  imageTag: string | null;
+  message: string | null;
+  updatedAt: string | null;
+};
+
+type UpdateHistoryEntry = {
+  targetVersion: string | null;
+  fromVersion: string | null;
+  state: "succeeded" | "failed";
+  startedAt: string | null;
+  finishedAt: string | null;
+  message: string | null;
+};
+
 type UpdateInfo = {
   currentVersion: string;
   latestVersion: string | null;
@@ -30,7 +49,11 @@ type UpdateInfo = {
   releaseUrl: string | null;
   hasUpdate: boolean;
   watcherEnabled: boolean;
+  prepullWatcherEnabled: boolean;
   status: SelfUpdateStatus;
+  prepull: PrepullStatus;
+  history: UpdateHistoryEntry[];
+  autoUpdateEnabled: boolean;
 };
 
 export default function SettingsPage() {
@@ -44,6 +67,7 @@ export default function SettingsPage() {
   const [updateRequesting, setUpdateRequesting] = React.useState(false);
   const [updateError, setUpdateError] = React.useState<string | null>(null);
   const [updatePollErrors, setUpdatePollErrors] = React.useState(0);
+  const [autoUpdateSaving, setAutoUpdateSaving] = React.useState(false);
 
   const loadUpdateInfo = React.useCallback(async (silent = false) => {
     if (!silent) {
@@ -157,6 +181,40 @@ export default function SettingsPage() {
       setSourceImportSaving(false);
     }
   };
+
+  const handleAutoUpdateToggle = async (checked: boolean) => {
+    setAutoUpdateSaving(true);
+    try {
+      const response = await fetch("/api/system/update/auto-update", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ enabled: checked }),
+      });
+      if (!response.ok) throw new Error("Unable to save auto-update setting.");
+      await loadUpdateInfo(true);
+    } catch {
+      setUpdateError("保存定时更新设置失败，请重试");
+    } finally {
+      setAutoUpdateSaving(false);
+    }
+  };
+
+  const handlePrepull = React.useCallback(
+    async (targetVersion: string) => {
+      try {
+        const response = await fetch("/api/system/update/prepull", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetVersion }),
+        });
+        if (!response.ok) throw new Error("Unable to request pre-pull.");
+        await loadUpdateInfo(true);
+      } catch {
+        setUpdateError("提交后台拉取失败，请重试");
+      }
+    },
+    [loadUpdateInfo]
+  );
 
   const handleUpdate = async () => {
     if (!updateInfo?.hasUpdate || !updateInfo.latestVersion) return;
@@ -338,6 +396,14 @@ export default function SettingsPage() {
             ) : (
               updateInfo?.hasUpdate && <p className="text-xs">发现新版本，可以一键更新。</p>
             )}
+            <UpdatePrepullSection updateInfo={updateInfo} onPrepull={handlePrepull} />
+            <SwitchField
+              label="每周自动更新"
+              description="每周日 03:00（服务器时间）自动检查，有新版本时自动更新到最新版（服务会短暂重启）。关闭时只在后台预拉新版镜像，不自动更新。"
+              checked={updateInfo?.autoUpdateEnabled ?? false}
+              disabled={!user || autoUpdateSaving}
+              onCheckedChange={(checked) => void handleAutoUpdateToggle(checked)}
+            />
             {updatePollErrors > 45 && (
               <p className="text-xs text-red-300">更新超时，服务可能未恢复，请检查服务器状态后刷新页面。</p>
             )}
@@ -364,6 +430,7 @@ export default function SettingsPage() {
                   : "立即更新"}
               </Button>
             </div>
+            <UpdateHistoryList updateInfo={updateInfo} />
           </CardContent>
         </Card>
       </div>

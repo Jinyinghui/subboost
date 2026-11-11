@@ -1,3 +1,21 @@
+# SubBoost v2.11.20
+
+## 中文
+
+- **新版先在后台拉好镜像**：有新版时，设置页的“系统更新”卡片会自动在后台先拉新镜像（状态 idle/拉取中/已就绪/失败），也可以点“开始后台拉取”手动触发；点“立即更新”时镜像已经在本地，更新基本是秒换容器，不用再盯着拉取层等几十分钟。拉取进度复用 2.11.19 的实时日志查看。
+- **更新完自动清理旧镜像**：更新成功后自动删掉同仓库的旧镜像，只保留当前版本和上一个版本，磁盘不再被越攒越多的旧镜像占满；清理是尽力而为，删不掉不影响更新结果。
+- **更新记录**：卡片下方新增“更新记录”，列出最近 20 次更新（版本、时间、成功/失败与原因），不用再翻服务器日志确认上次更新成没成。
+- **每周自动更新**：新增“每周自动更新”开关，打开后每周日 03:00（服务器时间）自动检查并更新到最新版；关闭时只做后台预拉，不自动更新，默认关闭。
+- 注意：更新到本版后，**需要在服务器上手动执行一次 `subboost ensure-update-services`**，才能立即启用后台拉取和每周定时检查（否则要等下一次更新才装上）；在这之前，预拉区会提示未启用，自动更新开关仍可保存。
+
+## English
+
+- **Pre-pull the new image in the background**: when a new version is available, the settings "System update" card automatically pre-pulls it in the background (states: idle/pulling/ready/failed), or you can trigger it manually with "Start background pull"; when you then click "Update now", the image is already local, so the update swaps containers in seconds instead of waiting tens of minutes for layers. Pull progress reuses the live log view from v2.11.19.
+- **Old images are pruned after an update**: after a successful update, old images of the same repository are removed automatically, keeping only the current and previous versions, so disk space no longer fills up with stale images; pruning is best-effort and never affects the update result.
+- **Update history**: a new "Update history" list under the card shows the last 20 updates (versions, time, success/failure and reason), so there is no need to dig through server logs to check the last update.
+- **Weekly auto-update**: a new "Weekly auto-update" switch checks and updates to the latest version every Sunday at 03:00 (server time) when on; when off, it only pre-pulls without updating. Default off.
+- Note: after updating to this version, **run `subboost ensure-update-services` once on the server** to activate background pre-pulling and the weekly check immediately (otherwise they are installed on the next update); until then the pre-pull section shows a not-enabled hint, and the auto-update switch can still be saved.
+
 # SubBoost v2.11.19
 
 ## 中文

@@ -5,6 +5,10 @@ const mocks = vi.hoisted(() => ({
   admin: vi.fn(),
   fetchLatest: vi.fn(),
   readStatus: vi.fn(),
+  readPrepull: vi.fn(),
+  readHistory: vi.fn(),
+  readAutoUpdate: vi.fn(),
+  requestPrepull: vi.fn(),
   requestUpdate: vi.fn(),
   SelfUpdateError: class SelfUpdateError extends Error {
     code: string;
@@ -20,7 +24,11 @@ const mocks = vi.hoisted(() => ({
 vi.mock("@local/lib/api-auth", () => ({ withCurrentAdmin: mocks.admin }));
 vi.mock("@local/lib/self-update", () => ({
   fetchLatestRelease: mocks.fetchLatest,
+  readAutoUpdateSetting: mocks.readAutoUpdate,
+  readPrepullStatus: mocks.readPrepull,
+  readUpdateHistory: mocks.readHistory,
   readUpdateStatus: mocks.readStatus,
+  requestPrepull: mocks.requestPrepull,
   requestSelfUpdate: mocks.requestUpdate,
   SelfUpdateError: mocks.SelfUpdateError,
 }));
@@ -44,6 +52,14 @@ const idleStatus = {
   logTail: null,
 };
 
+const idlePrepull = {
+  state: "idle",
+  targetVersion: null,
+  imageTag: null,
+  message: null,
+  updatedAt: null,
+};
+
 describe("local system update route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -52,6 +68,10 @@ describe("local system update route", () => {
     );
     mocks.fetchLatest.mockResolvedValue(latest);
     mocks.readStatus.mockReturnValue({ watcherEnabled: true, status: idleStatus });
+    mocks.readPrepull.mockReturnValue({ prepullWatcherEnabled: true, prepull: idlePrepull });
+    mocks.readHistory.mockReturnValue([]);
+    mocks.readAutoUpdate.mockReturnValue(false);
+    mocks.requestPrepull.mockReturnValue({ ...idlePrepull, state: "requested", targetVersion: "2.11.3" });
     mocks.requestUpdate.mockReturnValue({ ...idleStatus, state: "requested", targetVersion: "2.11.3" });
   });
 
@@ -61,9 +81,58 @@ describe("local system update route", () => {
     await expect(response.json()).resolves.toEqual({
       ...latest,
       watcherEnabled: true,
+      prepullWatcherEnabled: true,
       status: idleStatus,
+      prepull: { ...idlePrepull, state: "requested", targetVersion: "2.11.3" },
+      history: [],
+      autoUpdateEnabled: false,
     });
     expect(mocks.fetchLatest).toHaveBeenCalledWith({ fresh: true });
+    expect(mocks.requestPrepull).toHaveBeenCalledWith("admin-1", "2.11.3");
+  });
+
+  it("does not trigger a pre-pull when there is no update", async () => {
+    mocks.fetchLatest.mockResolvedValue({ ...latest, hasUpdate: false, latestVersion: "2.11.2" });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ prepull: idlePrepull });
+    expect(mocks.requestPrepull).not.toHaveBeenCalled();
+  });
+
+  it("does not trigger a pre-pull when the latest version is unknown", async () => {
+    mocks.fetchLatest.mockResolvedValue({ ...latest, hasUpdate: true, latestVersion: null });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ prepull: idlePrepull });
+    expect(mocks.requestPrepull).not.toHaveBeenCalled();
+  });
+
+  it("does not trigger a pre-pull while an update is running", async () => {
+    mocks.readStatus.mockReturnValue({
+      watcherEnabled: true,
+      status: { ...idleStatus, state: "running" },
+    });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ prepull: idlePrepull });
+    expect(mocks.requestPrepull).not.toHaveBeenCalled();
+  });
+
+  it("does not trigger a pre-pull when the pre-pull watcher is missing", async () => {
+    mocks.readPrepull.mockReturnValue({ prepullWatcherEnabled: false, prepull: idlePrepull });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ prepullWatcherEnabled: false });
+    expect(mocks.requestPrepull).not.toHaveBeenCalled();
+  });
+
+  it("keeps serving the status when the pre-pull trigger fails", async () => {
+    mocks.requestPrepull.mockImplementation(() => {
+      throw new mocks.SelfUpdateError("CONFIGURATION_ERROR", 503, "拉取服务未安装");
+    });
+    const response = await GET();
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toMatchObject({ prepull: idlePrepull });
   });
 
   it("requests an update for the latest version and returns 202", async () => {

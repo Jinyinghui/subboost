@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, renameSync, unlinkSync, writeFileSync } from "node:fs";
 import { resolveAppVersionInfo } from "@subboost/server-core/app-version";
 import { compareStableVersions, parseStableVersion } from "@local/lib/release-version";
 import type { LocalApiErrorCode } from "@local/lib/http";
@@ -24,6 +24,25 @@ export type LatestReleaseInfo = {
   latestTag: string | null;
   releaseUrl: string | null;
   hasUpdate: boolean;
+};
+
+export type PrepullState = "idle" | "requested" | "pulling" | "ready" | "failed";
+
+export type PrepullStatus = {
+  state: PrepullState;
+  targetVersion: string | null;
+  imageTag: string | null;
+  message: string | null;
+  updatedAt: string | null;
+};
+
+export type UpdateHistoryEntry = {
+  targetVersion: string | null;
+  fromVersion: string | null;
+  state: "succeeded" | "failed";
+  startedAt: string | null;
+  finishedAt: string | null;
+  message: string | null;
 };
 
 export class SelfUpdateError extends Error {
@@ -84,6 +103,26 @@ function watcherFile(): string {
   return `${opsDir()}/watcher.json`;
 }
 
+function prepullRequestFile(): string {
+  return `${opsDir()}/prepull-requested.json`;
+}
+
+function prepullStatusFile(): string {
+  return `${opsDir()}/prepull-status.json`;
+}
+
+function prepullWatcherFile(): string {
+  return `${opsDir()}/prepull-watcher.json`;
+}
+
+function historyFile(): string {
+  return `${opsDir()}/update-history.json`;
+}
+
+function autoUpdateFile(): string {
+  return `${opsDir()}/auto-update.json`;
+}
+
 function readString(value: unknown): string | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim();
@@ -128,6 +167,154 @@ export function readUpdateStatus(): { watcherEnabled: boolean; status: SelfUpdat
   const status = normalizeStatus(readJsonObject(statusFile()));
   // 状态文件里的 logTail 是旧文本，改用 live 日志尾部，页面才能看到实时进度。
   return { watcherEnabled: watcher?.installed === true, status: { ...status, logTail: readUpdateLogTail() } };
+}
+
+function isPrepullState(value: unknown): value is PrepullState {
+  return (
+    value === "idle" ||
+    value === "requested" ||
+    value === "pulling" ||
+    value === "ready" ||
+    value === "failed"
+  );
+}
+
+function normalizePrepullStatus(record: Record<string, unknown> | null): PrepullStatus {
+  return {
+    state: isPrepullState(record?.state) ? record.state : "idle",
+    targetVersion: readString(record?.targetVersion),
+    imageTag: readString(record?.imageTag),
+    message: readString(record?.message),
+    updatedAt: readString(record?.updatedAt),
+  };
+}
+
+export function readPrepullStatus(): { prepullWatcherEnabled: boolean; prepull: PrepullStatus } {
+  const watcher = readJsonObject(prepullWatcherFile());
+  return {
+    prepullWatcherEnabled: watcher?.installed === true,
+    prepull: normalizePrepullStatus(readJsonObject(prepullStatusFile())),
+  };
+}
+
+export function requestPrepull(adminId: string, targetVersion: string): PrepullStatus {
+  const dir = opsDir();
+  if (!existsSync(dir)) {
+    throw new SelfUpdateError(
+      "CONFIGURATION_ERROR",
+      503,
+      "后台拉取未启用：更新服务目录不存在，请先在服务器执行一次 subboost update。"
+    );
+  }
+  const { prepullWatcherEnabled, prepull } = readPrepullStatus();
+  if (!prepullWatcherEnabled) {
+    throw new SelfUpdateError(
+      "CONFIGURATION_ERROR",
+      503,
+      "后台拉取未启用：拉取服务未安装，请在服务器执行 subboost ensure-update-services（更新到 v2.11.20 后需手动执行一次）。"
+    );
+  }
+  // 同一版本已提交/拉取中/已就绪时直接返回，不重复提交。
+  if (
+    prepull.targetVersion === targetVersion &&
+    (prepull.state === "requested" || prepull.state === "pulling" || prepull.state === "ready")
+  ) {
+    return prepull;
+  }
+  const { status } = readUpdateStatus();
+  if (status.state === "requested" || status.state === "running" || existsSync(requestFile())) {
+    throw new SelfUpdateError("CONFLICT", 409, "已有更新正在进行，拉取会在更新结束后进行。");
+  }
+  const requestedAt = new Date().toISOString();
+  const request = { requestedAt, requestedBy: adminId, targetVersion };
+  try {
+    writeFileSync(prepullRequestFile(), `${JSON.stringify(request)}\n`, { flag: "wx" });
+  } catch (error) {
+    const code = (error as NodeJS.ErrnoException)?.code;
+    if (code === "EEXIST") return readPrepullStatus().prepull;
+    throw new SelfUpdateError(
+      "CONFIGURATION_ERROR",
+      503,
+      "无法写入拉取请求：更新服务目录不可写，请检查服务器上的更新服务安装。"
+    );
+  }
+  const nextStatus: PrepullStatus = {
+    state: "requested",
+    targetVersion,
+    imageTag: null,
+    message: "已提交后台拉取请求，等待拉取服务执行……",
+    updatedAt: requestedAt,
+  };
+  try {
+    writeFileSync(prepullStatusFile(), `${JSON.stringify(nextStatus)}\n`);
+  } catch {
+    try {
+      unlinkSync(prepullRequestFile());
+    } catch {
+      // Best effort: the watcher will ignore a stale request once the status is gone.
+    }
+    throw new SelfUpdateError("INTERNAL_ERROR", 500, "无法记录拉取状态，请稍后重试。");
+  }
+  return nextStatus;
+}
+
+function normalizeHistoryEntry(value: unknown): UpdateHistoryEntry | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  if (record.state !== "succeeded" && record.state !== "failed") return null;
+  return {
+    targetVersion: readString(record.targetVersion),
+    fromVersion: readString(record.fromVersion),
+    state: record.state,
+    startedAt: readString(record.startedAt),
+    finishedAt: readString(record.finishedAt),
+    message: readString(record.message),
+  };
+}
+
+export function readUpdateHistory(): UpdateHistoryEntry[] {
+  try {
+    const parsed: unknown = JSON.parse(readFileSync(historyFile(), "utf8"));
+    if (!Array.isArray(parsed)) return [];
+    const entries: UpdateHistoryEntry[] = [];
+    for (const item of parsed) {
+      const entry = normalizeHistoryEntry(item);
+      if (entry) entries.push(entry);
+    }
+    return entries;
+  } catch {
+    return [];
+  }
+}
+
+export function readAutoUpdateSetting(): boolean {
+  const record = readJsonObject(autoUpdateFile());
+  return record?.enabled === true;
+}
+
+export function writeAutoUpdateSetting(enabled: boolean): boolean {
+  const dir = opsDir();
+  if (!existsSync(dir)) {
+    throw new SelfUpdateError(
+      "CONFIGURATION_ERROR",
+      503,
+      "定时更新未启用：更新服务目录不存在，请先在服务器执行一次 subboost update。"
+    );
+  }
+  const payload = { enabled, updatedAt: new Date().toISOString() };
+  const tmpFile = `${autoUpdateFile()}.tmp.${process.pid}`;
+  try {
+    writeFileSync(tmpFile, `${JSON.stringify(payload)}\n`);
+    renameSync(tmpFile, autoUpdateFile());
+  } catch {
+    try {
+      unlinkSync(tmpFile);
+    } catch {
+      // Best effort.
+    }
+    throw new SelfUpdateError("INTERNAL_ERROR", 500, "无法保存定时更新设置，请稍后重试。");
+  }
+  return enabled;
 }
 
 export function requestSelfUpdate(adminId: string, targetVersion: string | null): SelfUpdateStatus {

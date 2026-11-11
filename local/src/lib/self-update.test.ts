@@ -24,14 +24,29 @@ vi.mock("node:fs", () => ({
   unlinkSync: vi.fn((path: string) => {
     files.delete(path);
   }),
+  renameSync: vi.fn((from: string, to: string) => {
+    const content = files.get(from);
+    if (content === undefined) {
+      const error = new Error("ENOENT") as NodeJS.ErrnoException;
+      error.code = "ENOENT";
+      throw error;
+    }
+    files.delete(from);
+    files.set(to, content);
+  }),
 }));
 
 import {
   fetchLatestRelease,
+  readAutoUpdateSetting,
+  readPrepullStatus,
+  readUpdateHistory,
   readUpdateStatus,
+  requestPrepull,
   requestSelfUpdate,
   SelfUpdateError,
   UPDATE_LOG_TAIL_LINES,
+  writeAutoUpdateSetting,
 } from "./self-update";
 
 const originalOpsDir = process.env.SUBBOOST_OPS_DIR;
@@ -477,5 +492,182 @@ describe("self-update lib", () => {
       releaseUrl: null,
       hasUpdate: false,
     });
+  });
+
+  it("reports a missing pre-pull watcher and an idle pre-pull status", () => {
+    expect(readPrepullStatus()).toEqual({
+      prepullWatcherEnabled: false,
+      prepull: { state: "idle", targetVersion: null, imageTag: null, message: null, updatedAt: null },
+    });
+  });
+
+  it("reads an installed pre-pull watcher and a ready pre-pull status", () => {
+    files.set("/ops", "");
+    files.set("/ops/prepull-watcher.json", JSON.stringify({ installed: true }));
+    files.set(
+      "/ops/prepull-status.json",
+      JSON.stringify({
+        state: "ready",
+        targetVersion: "2.11.3",
+        imageTag: "ghcr.io/jinyinghui/subboost:v2.11.3",
+        message: "镜像已就绪",
+        updatedAt: "2026-11-11T07:00:00Z",
+      })
+    );
+    expect(readPrepullStatus()).toEqual({
+      prepullWatcherEnabled: true,
+      prepull: {
+        state: "ready",
+        targetVersion: "2.11.3",
+        imageTag: "ghcr.io/jinyinghui/subboost:v2.11.3",
+        message: "镜像已就绪",
+        updatedAt: "2026-11-11T07:00:00Z",
+      },
+    });
+  });
+
+  it("treats an unknown pre-pull state as idle", () => {
+    files.set("/ops", "");
+    files.set("/ops/prepull-watcher.json", JSON.stringify({ installed: true }));
+    files.set("/ops/prepull-status.json", JSON.stringify({ state: "weird" }));
+    expect(readPrepullStatus().prepull.state).toBe("idle");
+  });
+
+  it("requests a pre-pull and returns the requested status", () => {
+    files.set("/ops", "");
+    files.set("/ops/prepull-watcher.json", JSON.stringify({ installed: true }));
+    const status = requestPrepull("admin-1", "2.11.3");
+    expect(status).toMatchObject({ state: "requested", targetVersion: "2.11.3" });
+    expect(JSON.parse(files.get("/ops/prepull-requested.json") ?? "{}")).toMatchObject({
+      requestedBy: "admin-1",
+      targetVersion: "2.11.3",
+    });
+  });
+
+  it("returns the current pre-pull status instead of re-requesting the same version", () => {
+    files.set("/ops", "");
+    files.set("/ops/prepull-watcher.json", JSON.stringify({ installed: true }));
+    files.set(
+      "/ops/prepull-status.json",
+      JSON.stringify({ state: "pulling", targetVersion: "2.11.3", message: "拉取中" })
+    );
+    expect(requestPrepull("admin-1", "2.11.3")).toMatchObject({ state: "pulling" });
+    expect(files.has("/ops/prepull-requested.json")).toBe(false);
+  });
+
+  it("refuses a pre-pull when the ops directory is missing", () => {
+    expect(() => requestPrepull("admin-1", "2.11.3")).toThrowError(/更新服务目录不存在/);
+  });
+
+  it("refuses a pre-pull when the watcher is not installed", () => {
+    files.set("/ops", "");
+    expect(() => requestPrepull("admin-1", "2.11.3")).toThrowError(/拉取服务未安装/);
+  });
+
+  it("refuses a pre-pull while an update is running", () => {
+    files.set("/ops", "");
+    files.set("/ops/prepull-watcher.json", JSON.stringify({ installed: true }));
+    files.set("/ops/update-status.json", JSON.stringify({ state: "running" }));
+    expect(() => requestPrepull("admin-1", "2.11.3")).toThrowError(/已有更新正在进行/);
+  });
+
+  it("returns the current pre-pull status when a request is already pending", () => {
+    files.set("/ops", "");
+    files.set("/ops/prepull-watcher.json", JSON.stringify({ installed: true }));
+    files.set("/ops/prepull-requested.json", JSON.stringify({ targetVersion: "2.11.3" }));
+    files.set(
+      "/ops/prepull-status.json",
+      JSON.stringify({ state: "requested", targetVersion: "2.11.3" })
+    );
+    expect(requestPrepull("admin-1", "2.11.3")).toMatchObject({
+      state: "requested",
+      targetVersion: "2.11.3",
+    });
+  });
+
+  it("re-requests a pre-pull after a failed attempt for the same version", () => {
+    files.set("/ops", "");
+    files.set("/ops/prepull-watcher.json", JSON.stringify({ installed: true }));
+    files.set(
+      "/ops/prepull-status.json",
+      JSON.stringify({ state: "failed", targetVersion: "2.11.3", message: "拉取失败" })
+    );
+    expect(requestPrepull("admin-1", "2.11.3")).toMatchObject({
+      state: "requested",
+      targetVersion: "2.11.3",
+    });
+    expect(files.has("/ops/prepull-requested.json")).toBe(true);
+  });
+
+  it("treats a JSON array status file as idle", () => {
+    files.set("/ops", "");
+    files.set("/ops/update-status.json", JSON.stringify([1, 2]));
+    expect(readUpdateStatus().status.state).toBe("idle");
+  });
+
+  it("reports no update when the upstream API returns a JSON array", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => releaseResponse([1, 2], 200)));
+    await expect(fetchLatestRelease()).resolves.toMatchObject({
+      latestVersion: null,
+      hasUpdate: false,
+    });
+  });
+
+  it("reads the update history and skips malformed entries", () => {
+    files.set("/ops", "");
+    files.set(
+      "/ops/update-history.json",
+      JSON.stringify([
+        {
+          targetVersion: "2.11.3",
+          fromVersion: "2.11.2",
+          state: "succeeded",
+          startedAt: "2026-11-11T06:00:00Z",
+          finishedAt: "2026-11-11T06:05:00Z",
+          message: "更新完成",
+        },
+        { state: "weird" },
+        "not-an-entry",
+      ])
+    );
+    expect(readUpdateHistory()).toEqual([
+      {
+        targetVersion: "2.11.3",
+        fromVersion: "2.11.2",
+        state: "succeeded",
+        startedAt: "2026-11-11T06:00:00Z",
+        finishedAt: "2026-11-11T06:05:00Z",
+        message: "更新完成",
+      },
+    ]);
+  });
+
+  it("returns an empty history when the history file is missing or malformed", () => {
+    expect(readUpdateHistory()).toEqual([]);
+    files.set("/ops", "");
+    files.set("/ops/update-history.json", "{not json");
+    expect(readUpdateHistory()).toEqual([]);
+    files.set("/ops/update-history.json", JSON.stringify({ not: "an array" }));
+    expect(readUpdateHistory()).toEqual([]);
+  });
+
+  it("reads the auto-update setting as disabled when missing or invalid", () => {
+    expect(readAutoUpdateSetting()).toBe(false);
+    files.set("/ops", "");
+    files.set("/ops/auto-update.json", JSON.stringify({ enabled: "yes" }));
+    expect(readAutoUpdateSetting()).toBe(false);
+  });
+
+  it("writes and reads the auto-update setting", () => {
+    files.set("/ops", "");
+    expect(writeAutoUpdateSetting(true)).toBe(true);
+    expect(readAutoUpdateSetting()).toBe(true);
+    expect(writeAutoUpdateSetting(false)).toBe(false);
+    expect(readAutoUpdateSetting()).toBe(false);
+    expect([...files.keys()].filter((key) => key.includes(".tmp."))).toEqual([]);
+  });
+
+  it("refuses to write the auto-update setting when the ops directory is missing", () => {
+    expect(() => writeAutoUpdateSetting(true)).toThrowError(SelfUpdateError);
   });
 });
